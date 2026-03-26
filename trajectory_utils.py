@@ -1,6 +1,46 @@
+import copy
 from evo.core import metrics, sync, lie_algebra as lie
 from evo.core.trajectory import PoseTrajectory3D
 import numpy as np
+
+
+def kabsch_algorithm(
+    traj1, traj2, alignment_frac: float = 0.25
+) -> tuple[int, np.ndarray, np.ndarray]:
+    """
+    Modified Kabsch algorithm that fixes first points and finds optimal rotation.
+
+    Parameters:
+    traj1, traj2: numpy arrays of shape (n_points, 3) representing 3D trajectories
+    alignment_frac: fraction of points to use for alignment
+
+    Returns:
+    r_a: rotation matrix (3x3) for evo transform
+    t_a: translation vector (3,) for evo transform
+    """
+    traj1 = np.array(traj1)
+    traj2 = np.array(traj2)
+
+    # Translation to align first points
+    t_a = traj1[0] - traj2[0]
+    traj1_centered = traj1 - traj1[0]
+    traj2_centered = traj2 - traj2[0]
+
+    target_len = int(alignment_frac * traj1_centered.shape[0])
+    P = traj1_centered[0:target_len].T  # 3 x (n-1) - target points
+    Q = traj2_centered[0:target_len].T  # 3 x (n-1) - points to rotate
+
+    # Compute cross-covariance matrix, its SVD, and extract rotatio
+    H = Q @ P.T
+    U, S, Vt = np.linalg.svd(H)
+    r_a = Vt.T @ U.T
+
+    # Ensure proper rotation (det(R) = 1)
+    if np.linalg.det(r_a) < 0:
+        Vt[-1, :] *= -1
+        r_a = Vt.T @ U.T
+
+    return target_len, r_a, t_a
 
 
 def J_left_so3(phi):
@@ -42,42 +82,60 @@ def deltaT_from_velocities(v_b, omega_b, dt):
     return T
 
 
+def velocities_from_trajectories(traj):
+    traj = copy.deepcopy(traj)
+    p_rel = relative_pose_from_trajectories([traj])[0]
+    delta_ts = traj.timestamps[1:] - traj.timestamps[:-1]
+    assert len(p_rel) == len(delta_ts), f"Length does not match, obtained {len(p_rel)}, {len(delta_ts)}"
+    vel_gt = [velocities_from_deltaT(dT, dt) for dT, dt in zip(p_rel, delta_ts)]
+    traj.reduce_to_ids(np.arange(1,len(traj.positions_xyz)))
+    return (
+        [vl for vl, va in vel_gt],
+        [va for vl, va in vel_gt],
+        traj,
+        p_rel,
+        delta_ts
+    )
+
+
 def integrate_body_twists(v_b_list, omega_b_list, dt_list, T0=np.eye(4)):
     T_rels = []
     T_ws = [T0.copy()]
+    assert len(v_b_list) == len(omega_b_list) and len(v_b_list) == len(dt_list)
     for v_b, omega_b, dt in zip(v_b_list, omega_b_list, dt_list):
         T_rels.append(deltaT_from_velocities(v_b, omega_b, dt))
         T_ws.append(T_ws[-1] @ T_rels[-1])
     return T_rels, T_ws
 
 
-def orientations_from_positions(traj, speed_eps=1e-3):
+def orientations_from_positions(traj, speed_eps=2e-1):
+    traj = copy.deepcopy(traj)
     delta_p = traj.positions_xyz[1:] - traj.positions_xyz[:-1]
-    # np.vstack((
-    #     (traj.positions_xyz[1] - traj.positions_xyz[0]).reshape(1,3),
-    #     traj.positions_xyz[2:] - traj.positions_xyz[:-2],
-    #     (traj.positions_xyz[-1] - traj.positions_xyz[-2]).reshape(1,3),
-    # ))
-    delta_ts = traj.timestamps[1:] - traj.timestamps[:-1]
-    # np.hstack((
-    #     (traj.timestamps[1:2] - traj.timestamps[0:1]),
-    #     traj.timestamps[2:] - traj.timestamps[:-2],
-    #     (traj.timestamps[-1:] - traj.timestamps[-2:-1])
-    # ))
-    # delta_p /= delta_ts.reshape((-1,1))
+    delta_t = traj.timestamps[1:] - traj.timestamps[:-1]
+
+    # # Smooth position delta, low velocity leads to delta close to noise in position
+    smoothing_win_sz = 5
+    delta_p[:, 0] = np.convolve(delta_p[:,0], np.ones(smoothing_win_sz) / smoothing_win_sz, mode="same")
+    delta_p[:, 1] = np.convolve(delta_p[:, 1], np.ones(smoothing_win_sz) / smoothing_win_sz, mode="same")
 
     headings = np.arctan2(delta_p[:,1], delta_p[:,0])
-    low_speed_mask = np.linalg.norm(delta_p[1:], axis=1) < speed_eps
-    headings[1:][low_speed_mask] = headings[:-1][low_speed_mask]
-    headings[0] = 0.0 if np.linalg.norm(delta_p[0]) < speed_eps else headings[0]
+    speed = np.linalg.norm(delta_p / delta_t.reshape((-1,1)), axis=1)
+    for pos_idx in range(1, len(delta_p)):
+        if speed[pos_idx] < speed_eps:
+            headings[pos_idx] = headings[pos_idx-1]
+
+    # Remove jumps in headings, as they will lead to spikes in angular velocity
+    win_sz = 5
+    headings = [np.median(headings[i:i+win_sz]) for i in range(len(headings) - win_sz+1)] + list(headings)[-win_sz+1:]
+    headings = [headings[0]] + headings
 
     for idx, theta in enumerate(headings):
         traj.poses_se3[idx][:2, :2] = np.array(
-            [[np.cos(theta), -np.sin(theta)],
-            [np.sin(theta), np.cos(theta)]]
+            [[np.cos(theta), np.sin(theta)],
+            [-np.sin(theta), np.cos(theta)]]
         )
 
-    return traj
+    return traj, headings
 
 
 def relative_pose(traj, id_pairs):
@@ -87,7 +145,7 @@ def relative_pose(traj, id_pairs):
     ]
 
 
-def relative_pose_from_sync_trajectories(
+def relative_pose_from_trajectories(
     trajectories,
     delta: float = 1,
     delta_unit: metrics.Unit = metrics.Unit.frames,
@@ -105,6 +163,19 @@ def relative_pose_from_sync_trajectories(
         relative_pose(traj, id_pairs)
         for traj in trajectories
     ]
+
+
+def reduce_to_ids(arr, ids):
+    if type(arr) == PoseTrajectory3D:
+        traj = copy.deepcopy(arr)
+        traj.reduce_to_ids(ids)
+        return traj
+    elif type(arr) == np.ndarray:
+        return arr[ids]
+    elif type(arr) == list:
+        return np.array(arr)[ids]
+    else:
+        raise Exception("Unknown type, reduce_to_ids only handles PoseTrajectory3D, list or np.ndarray")
 
 
 def compute_rpe_from_rel_pose(p_rel_ref, p_rel_est, pose_relation='translation'):
@@ -148,44 +219,64 @@ def compute_rpe_from_rel_pose(p_rel_ref, p_rel_est, pose_relation='translation')
         )
 
 
+def rmse(arr1, arr2):
+    return np.linalg.norm(
+        np.array(arr1) - np.array(arr2),
+        axis=1
+    )
+
 if __name__ == "__main__":
     from fomo_utils import get_trajectory_dir, get_odom_trajectory, get_gt_trajectory
 
     # Load data
     trajectory_dir = get_trajectory_dir()
     traj_gt = get_gt_trajectory(trajectory_dir)
-    traj_odom, twist_odom = get_odom_trajectory(trajectory_dir)
-
-    # Synchronize trajectories
-    traj_gt_sync, traj_odom_sync = sync.associate_trajectories(traj_gt, traj_odom, 0.05)
-    id_pairs = metrics.id_pairs_from_delta(traj_gt_sync.poses_se3, 1, metrics.Unit.frames, 0.1)
-
-    traj_gt_oriented_sync = orientations_from_positions(traj_gt_sync)
-    p_rel_gt, p_rel_odom = relative_pose_from_sync_trajectories([traj_gt_oriented_sync, traj_odom_sync])
-
-    p_gt = np.array(traj_gt_sync.poses_se3)
-    p_gt[:, :3, 3] -= traj_gt_sync.poses_se3[0][:3, 3]
+    traj_gt_oriented, gt_headings = orientations_from_positions(traj_gt)
+    traj_odom, lin_vel_twist, ang_vel_twist = get_odom_trajectory(trajectory_dir)
+    delta_ts_twist = traj_odom.timestamps[1:] - traj_odom.timestamps[:-1]
 
     # Recover linear and angular velocities from trajectories
-    delta_ts = traj_gt_sync.timestamps[1:] - traj_gt_sync.timestamps[:-1]
-    vel_gt = [velocities_from_deltaT(dT, dt) for dT, dt in zip(p_rel_gt, delta_ts)]
-    lin_vel_gt = [vl for vl, va in vel_gt]
-    ang_vel_gt = [va for vl, va in vel_gt]
+    lin_vel_gt, ang_vel_gt, traj_gt_oriented, p_rel_gt, delta_ts = velocities_from_trajectories(traj_gt_oriented)
 
-    vel_odom = [velocities_from_deltaT(dT, dt) for dT, dt in zip(p_rel_odom, delta_ts)]
-    lin_vel_odom = [vl for vl, va in vel_odom]
-    ang_vel_odom = [va for vl, va in vel_odom]
+    # Synchronize trajectories
+    ids_gt, ids_odom = sync.matching_time_indices(traj_gt_oriented.timestamps, traj_odom.timestamps, max_diff=0.05)
+    lin_vel_gt, ang_vel_gt = reduce_to_ids(lin_vel_gt, ids_gt), reduce_to_ids(ang_vel_gt, ids_gt)
+    p_rel_gt, delta_ts = reduce_to_ids(p_rel_gt, ids_gt), reduce_to_ids(delta_ts, ids_gt)
+    traj_gt_sync = reduce_to_ids(traj_gt_oriented, ids_gt)
+    traj_odom_sync = reduce_to_ids(traj_odom, ids_odom)
+    lin_vel_twist_sync = lin_vel_twist[ids_odom]
+    ang_vel_twist_sync = ang_vel_twist[ids_odom]
 
-    lin_vel_err = [vl_gt - vl_odom for (vl_gt, _), (vl_odom, _)  in zip(vel_gt, vel_odom)]
-    ang_vel_err = [va_gt - va_odom for (_, va_gt), (_, va_odom)  in zip(vel_gt, vel_odom)]
+    print("Twist-GT linear velocity RMSE", rmse(lin_vel_gt, lin_vel_twist_sync).mean())
+    print("Twist-GT angular velocity RMSE", rmse(ang_vel_gt, ang_vel_twist_sync).mean())
 
-    import matplotlib.pyplot as plt
-    plt.plot(lin_vel_err); plt.show()
-    plt.plot(ang_vel_err); plt.show()
+    ###########################################################################
+    # Test the velocity from poses computation
+    ###########################################################################
 
-    # Reconstruct the trajectory from the velocities extracted
+    lin_vel_odom, ang_vel_odom, traj_odom, p_rel_odom, delta_ts_odom = velocities_from_trajectories(traj_odom)
+    ids_gt, ids_odom = sync.matching_time_indices(traj_gt_oriented.timestamps, traj_odom.timestamps, max_diff=0.05)
+
+    # traj_odom lost the first element in the velocity computation, so we have to index from 1
+    print("Odom-Twist linear velocity RMSE full traj.", rmse(lin_vel_twist[1:], lin_vel_odom).mean())
+    print("Odom-Twist angular velocity RMSE full traj.", rmse(ang_vel_twist[1:], ang_vel_odom).mean())
+
+    ###########################################################################
+    # Test the poses from velocites computation
+    ###########################################################################
     p_rel_gt_rec, p_gt_rec = integrate_body_twists(lin_vel_gt, ang_vel_gt, delta_ts)
-    p_rel_odom_rec, p_odom_rec = integrate_body_twists(lin_vel_odom, ang_vel_odom, delta_ts)
+    p_rel_odom_rec, p_odom_rec = integrate_body_twists(lin_vel_odom, ang_vel_odom, delta_ts_odom)
+    p_rel_twist, p_twist_rec = integrate_body_twists(lin_vel_twist[1:], ang_vel_twist[1:], delta_ts_twist)
 
-    print("GT rec err", compute_rpe_from_rel_pose(p_rel_gt, p_rel_gt_rec).mean())
-    print("Odom rec err", compute_rpe_from_rel_pose(p_rel_odom, p_rel_odom_rec).mean())
+
+    print("GT  reconstruction RPE", compute_rpe_from_rel_pose(p_rel_gt, p_rel_gt_rec, 'full').mean())
+    print("Odom reconstruction RPE", compute_rpe_from_rel_pose(p_rel_odom, p_rel_odom_rec, 'full').mean())
+    print("Odom-Twist RPE", compute_rpe_from_rel_pose(p_rel_odom, p_rel_twist, 'full').mean())
+
+    traj_gt_aligned = copy.deepcopy(traj_gt_oriented)
+    num_used_poses, r_a, t_a = kabsch_algorithm(
+        np.array(p_gt_rec)[:,:3,3], traj_gt_aligned.positions_xyz
+    )
+    pos_gt_aligned = np.dot(r_a, (traj_gt_aligned.positions_xyz + t_a).T).T
+    print("GT absolute position reconstruction RMSE", rmse(np.array(p_gt_rec)[:, :3, 3], pos_gt_aligned).mean())
+    print("Odom absolute position reconstruction RMSE", rmse(np.array(p_odom_rec)[:, :3, 3], np.array(p_twist_rec)[:, :3, 3]).mean())

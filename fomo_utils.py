@@ -8,14 +8,44 @@ from pytransform3d import transformations as pt
 from pytransform3d.transform_manager import TransformManager
 
 DATASET_DIR = "/home/jbweibel/code/forest-mapping/adaptive_slip_correction/fomo-dataset_downloads/"
+DEPLOYMENTS = [
+    '2024-11-21',
+    '2024-11-28',
+    '2025-01-10',
+    '2025-01-29',
+    '2025-03-10',
+    '2025-04-15',
+    '2025-05-28',
+    '2025-06-26',
+    '2025-08-20',
+    '2025-09-24',
+    '2025-10-14',
+    '2025-11-03',
+]
+
+TRAJECTORIES = [
+    'red',
+    'blue',
+    'green',
+    'magenta',
+    'yellow',
+    'orange'
+]
+
+
 
 def get_trajectory_dir(deployment="2024-11-21", trajectory="blue"):
     deployment_dir = os.path.join(DATASET_DIR, deployment)
-    return [
+    assert deployment in DEPLOYMENTS, f"Invalid deployment, Received {deployment}"
+    assert trajectory in TRAJECTORIES, f"Invalid trajectory, Received {trajectory}"
+    traj_dirs = [
         os.path.join(deployment_dir, fdir)
         for fdir in os.listdir(os.path.join(deployment_dir))
         if fdir.startswith(trajectory)
-    ][0]
+    ]
+    assert len(traj_dirs) != 0, f"Invalid deployment-trajectory, Received {deployment} - {trajectory}"
+
+    return traj_dirs[0]
 
 
 def get_transforms(trajectory_dir):
@@ -56,27 +86,29 @@ def get_odom_trajectory(trajectory_dir):
         odom[['qw', 'qx', 'qy', 'qz']],
         odom['t'] / 1e6)
 
-    return odom_traj, odom[['t', 'tlx', 'tly', 'tlz', 'tax', 'tay', 'taz']]
+    return (
+        odom_traj,
+        np.array(odom[['tlx', 'tly', 'tlz']]),
+        np.array(odom[['tax', 'tay', 'taz']])
+    )
+
+
+def get_imu_data(trajectory_dir, imu='vectornav', tm=None):
+    df = pd.read_csv(os.path.join(trajectory_dir, f'{imu}.csv'))
+    accel = np.array(df.loc[:, ['ax', 'ay', 'az']])
+    gyro = np.array(df.loc[:, ['wx', 'wy', 'wz']])
+
+    if tm:
+        rot = tm.get_transform(imu, 'base_link')[:3,:3]
+        accel = (rot @ accel.T).T
+        gyro = (rot @ gyro.T).T
+
+    return accel, gyro, np.array(df.loc[:, ['t']] / 1e6)
 
 
 if __name__ == "__main__":
     trajectory_dir = get_trajectory_dir()
-
     transform_manager = get_transforms(trajectory_dir)
-
-    ### Obtain correctly oriented gravity vector
-    # Load IMUs data
-    df = pd.read_csv(os.path.join(trajectory_dir, 'vectornav.csv'))
-    accel = np.array(df.loc[:, ['ax', 'ay', 'az']])
-    gyro = np.array(df.loc[:, ['wx', 'wy', 'wz']])
-
-    # Get the transformation between the vectornav and the robosense frame of reference
-    # tf_vectornav_robosense = transform_manager.get_transform('vectornav', 'robosense')
-
-    # Estimate the gravity vector
-    freq = 200.0
-    dt = 1/freq
-    # g_body = estimate_gravity(accel, gyro, dt, g=9.80665, kp=2.0, ki=0.05)
-
-    ### Correctly orient the path
-    # Load odom and GT path
+    get_gt_trajectory(trajectory_dir)
+    get_odom_trajectory(trajectory_dir)
+    get_imu_data(trajectory_dir)
