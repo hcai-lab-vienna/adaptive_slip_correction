@@ -56,7 +56,7 @@ def get_odom_trajectory(trajectory_dir):
         odom[['qw', 'qx', 'qy', 'qz']],
         odom['t'] / 1e6)
 
-    return odom_traj, odom[['tlx', 'tly', 'tlz', 'tax', 'tay', 'taz']]
+    return odom_traj, odom[['t', 'tlx', 'tly', 'tlz', 'tax', 'tay', 'taz']]
 
 
 if __name__ == "__main__":
