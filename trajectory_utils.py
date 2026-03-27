@@ -229,7 +229,7 @@ if __name__ == "__main__":
     from fomo_utils import get_trajectory_dir, get_odom_trajectory, get_gt_trajectory
 
     # Load data
-    trajectory_dir = get_trajectory_dir()
+    trajectory_dir = get_trajectory_dir("2024-11-21", 'blue')
     traj_gt = get_gt_trajectory(trajectory_dir)
     traj_gt_oriented, gt_headings = orientations_from_positions(traj_gt)
     traj_odom, lin_vel_twist, ang_vel_twist = get_odom_trajectory(trajectory_dir)
@@ -273,10 +273,10 @@ if __name__ == "__main__":
     print("Odom reconstruction RPE", compute_rpe_from_rel_pose(p_rel_odom, p_rel_odom_rec, 'full').mean())
     print("Odom-Twist RPE", compute_rpe_from_rel_pose(p_rel_odom, p_rel_twist, 'full').mean())
 
-    traj_gt_aligned = copy.deepcopy(traj_gt_oriented)
+    traj_gt_aligned = copy.deepcopy(traj_gt_sync)
     num_used_poses, r_a, t_a = kabsch_algorithm(
-        np.array(p_gt_rec)[:,:3,3], traj_gt_aligned.positions_xyz
+        np.array(p_gt_rec)[1:,:3,3], traj_gt_aligned.positions_xyz
     )
     pos_gt_aligned = np.dot(r_a, (traj_gt_aligned.positions_xyz + t_a).T).T
-    print("GT absolute position reconstruction RMSE", rmse(np.array(p_gt_rec)[:, :3, 3], pos_gt_aligned).mean())
+    print("GT absolute position reconstruction RMSE", rmse(np.array(p_gt_rec)[1:, :3, 3], pos_gt_aligned).mean())
     print("Odom absolute position reconstruction RMSE", rmse(np.array(p_odom_rec)[:, :3, 3], np.array(p_twist_rec)[:, :3, 3]).mean())

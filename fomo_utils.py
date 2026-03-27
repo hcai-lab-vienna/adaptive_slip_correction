@@ -36,14 +36,14 @@ TRAJECTORIES = [
 
 def get_trajectory_dir(deployment="2024-11-21", trajectory="blue"):
     deployment_dir = os.path.join(DATASET_DIR, deployment)
-    assert deployment in DEPLOYMENTS, f"Invalid deployment, Received {deployment}"
-    assert trajectory in TRAJECTORIES, f"Invalid trajectory, Received {trajectory}"
+    assert deployment in DEPLOYMENTS, f"Invalid deployment, Received '{deployment}'"
+    assert trajectory in TRAJECTORIES, f"Invalid trajectory, Received '{trajectory}'"
     traj_dirs = [
         os.path.join(deployment_dir, fdir)
         for fdir in os.listdir(os.path.join(deployment_dir))
         if fdir.startswith(trajectory)
     ]
-    assert len(traj_dirs) != 0, f"Invalid deployment-trajectory, Received {deployment} - {trajectory}"
+    assert len(traj_dirs) != 0, f"Invalid deployment-trajectory, Received '{deployment}' - '{trajectory}'"
 
     return traj_dirs[0]
 
