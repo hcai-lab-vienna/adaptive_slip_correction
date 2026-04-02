@@ -19,8 +19,9 @@ from pathlib import Path
 from datetime import datetime
 from scipy.signal import savgol_filter
 from evo.core import  sync
-from adaptive_slip_correction.fomo_utils import get_odom_trajectory, get_gt_trajectory
-from adaptive_slip_correction.trajectory_utils import (kabsch_algorithm,compute_rpe_from_rel_pose,
+from imu_utils import estimate_gravity
+from fomo_utils import get_odom_trajectory, get_gt_trajectory
+from trajectory_utils import (kabsch_algorithm,compute_rpe_from_rel_pose,
                                                        integrate_body_twists,rmse,orientations_from_positions,
                                                        velocities_from_trajectories,reduce_to_ids)
 import copy
@@ -44,7 +45,7 @@ CONDITION_CLASSIFICATION=[(0,'little snow on the road'),
                           (6,'clear road/Gravel')]
 DRIVETRAIN_CLASSIFICATION=[(0,'Wheel'),(1,'Track')]
 
-features_terrain=['Soil Condition']#'Slope'== INFO GRAVITY
+features_terrain=['Soil Condition']  #'Slope'== INFO GRAVITY
 
 ARRAY_Δx=[]
 ARRAY_Δy=[]
@@ -86,12 +87,14 @@ FEATURES_L_W = [
     'ANG_VEL_y',
     'ANG_VEL_z'
 ]
-lABEL_L_W=['GT_LIN_VEL_x',
+LABEL_L_W=[
+    'GT_LIN_VEL_x',
     'GT_LIN_VEL_y',
     'GT_LIN_VEL_z',
     'GT_ANG_VEL_x',
     'GT_ANG_VEL_y',
-    'GT_ANG_VEL_z']
+    'GT_ANG_VEL_z'
+]
 
 
 def get_season(fecha_str):
@@ -113,11 +116,13 @@ def get_season(fecha_str):
     else:
         return "autumn"
 
+
 # Function to create the DataFrame with only the index
 def crear_dataframe_con_indices(indices):
     # Crear un DataFrame vacío con el índice proporcionado
     df = pd.DataFrame(index=indices)
     return df
+
 
 def rellenar_soil_Condition(df):
     # make sure datetime in index
@@ -135,6 +140,7 @@ def rellenar_soil_Condition(df):
     df["Soil_type"] = pd.Series(df.index.date,index=df.index).map(condition_dict)
     df["Drivetrain_type"] = pd.Series(df.index.date,index=df.index).map(drivetrain_dict)
     return df
+
 
 # -------------------------------------------------
 # Function to evaluate  T-kan SGDRegressor PassiveAgressiveRegressor
@@ -164,7 +170,7 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
     #if name=='T-KAN (real)':
     # Inicializamos Page-Hinkley
     if flag==0:
-        ph = PageHinkley(delta=0.0019, lambda_=26,alpha=0.999)  # ajustar 
+        ph = PageHinkley(delta=0.0019, lambda_=26,alpha=0.999)  # ajustar
     elif flag==1:
         ph = PageHinkley(delta=0.002, lambda_=20,alpha=0.999)  # ajustar
     else:
@@ -254,6 +260,8 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
         "memory_kb": peak / 1024,
         "drifts": drifts
     },preds
+
+
 def create_lags_fast(X, y, lags=10):
     X_lagged = []
     y_lagged = []
@@ -263,6 +271,8 @@ def create_lags_fast(X, y, lags=10):
         )
         y_lagged.append(y[i])
     return np.array(X_lagged), np.array(y_lagged)
+
+
 def create_sequences_flat(X, y, lags=15):
     X_seq = []
     y_seq = []
@@ -278,6 +288,8 @@ def create_sequences_flat(X, y, lags=15):
     X_seq = X_seq.reshape(X_seq.shape[0], -1)
 
     return X_seq, y_seq
+
+
 def create_sequences(X, y, lags=15):
     X_seq = []
     y_seq = []
@@ -287,103 +299,34 @@ def create_sequences(X, y, lags=15):
         y_seq.append(y[i])  # valor siguiente
 
     return np.array(X_seq), np.array(y_seq)
+
+
 def columns_all_nan(df):
     return df.columns[df.isna().all()].tolist()
+
+
 def fix_decimal(x, n_integer_digits=10):
     x = float(x)
     digits = int(np.floor(np.log10(abs(x)))) + 1
     shift = digits - n_integer_digits
     return x / (10 ** shift)
+
+
 def From_GNSS_2_ODOM(coordgnssX,coordgnssY):
     return coordgnssX-Δx,coordgnssY-Δy
+
+
 def From_ODOM_2_GNSS(coord_odomX,coord_odomY):
     return coord_odomX+Δx,coord_odomY+Δy
+
+
 def trasladar_serie(serie, cantidad):
     return serie + cantidad
+
+
 # ============================================================
 # LOAD and PREPROCESS FUNCTIONS
 # ============================================================
-def quat_mul(q, r):
-    # Hamilton product q ⊗ r, quaternions as [w, x, y, z]
-    w,x,y,z = q
-    a,b,c,d = r
-    return np.array([
-        w*a - x*b - y*c - z*d,
-        w*b + x*a + y*d - z*c,
-        w*c - x*d + y*a + z*b,
-        w*d + x*c - y*b + z*a
-    ])
-
-def quat_exp_omega(q, omega, dt):
-    # Integrate q_dot = 0.5*q⊗[0,omega], first-order
-    omega_quat = np.hstack(([0.0], omega))
-    dq = quat_mul(q, omega_quat) * 0.5 * dt
-    q_new = q + dq
-    return q_new / np.linalg.norm(q_new)
-
-def R_from_quat(q):
-    w,x,y,z = q
-    # Rotation matrix (world from body). Here we use body->world.
-    R = np.array([
-        [1-2*(y*y+z*z), 2*(x*y - z*w), 2*(x*z + y*w)],
-        [ 2*(x*y + z*w), 1-2*(x*x+z*z), 2*(y*z - x*w)],
-        [ 2*(x*z - y*w), 2*(y*z + x*w), 1-2*(x*x+y*y)]
-    ])
-    return R
-
-def init_quat_from_acc(acc):
-    # roll/pitch from accelerometer; yaw=0
-    ax, ay, az = acc / np.linalg.norm(acc)
-    pitch = np.arctan2(-ax, np.sqrt(ay*ay + az*az))
-    roll = np.arctan2( ay, az)
-    cy, sy = 1.0, 0.0 # yaw = 0
-    cr, sr = np.cos(roll/2), np.sin(roll/2)
-    cp, sp = np.cos(pitch/2), np.sin(pitch/2)
-    # ZYX yaw-pitch-roll to quaternion [w,x,y,z]
-    w = cy*cp*cr + sy*sp*sr
-    x = cy*cp*sr - sy*sp*cr
-    y = cy*sp*cr + sy*cp*sr
-    z = sy*cp*cr - cy*sp*sr
-    q = np.array([w,x,y,z])
-    return q/np.linalg.norm(q)
-
-def estimate_gravity(acc, gyro, dt, g=9.80665, kp=1.0, ki=0.3):
-    # Inspired by Mahony filter
-
-    N = len(acc)
-    q = init_quat_from_acc(acc[0])
-    bg = np.zeros(3)
-    g_body = np.zeros((N,3))
-
-    for k in range(1, N):
-        if np.linalg.norm(gyro[k]) == 0:
-            R = R_from_quat(q)
-            # Gravity in body frame (down)
-            g_body[k] = R.T @ np.array([0,0,-g])
-            continue
-
-        # Use accel if credible
-        a = acc[k]
-        anorm = np.linalg.norm(a)
-
-        omega = gyro[k]
-
-        if 0.9*g < anorm < 1.1*g and np.linalg.norm(gyro[k]) < 3.0:
-            R = R_from_quat(q) # world_from_body
-            g_up_hat = R.T @ np.array([0,0,1.0]) # up in body frame
-
-            e = np.cross(a / anorm, g_up_hat)
-            bg -= ki*e*dt
-            omega = gyro[k] - bg + kp*e
-
-        # Integrate small correction
-        q = quat_exp_omega(q, omega, dt)
-        R = R_from_quat(q)
-        # Gravity in body frame (down)
-        g_body[k] = R.T @ np.array([0,0,-1])
-
-    g_body[0] = g_body[1]
-    return g_body
 
 def load_meta(path,season):
     print(path)
@@ -518,6 +461,7 @@ def load_meta(path,season):
 
     return df_meteo_final
 
+
 def analyze_index(df):
     diffs = df.index.to_series().diff().dropna()
     return {
@@ -529,6 +473,7 @@ def analyze_index(df):
         "max_gap": diffs.max(),
         "count": len(df)
     }
+
 
 def load_trajectory_files(path,season):
     # ---------- TRAJECTORY ----------
@@ -909,6 +854,7 @@ def load_trajectory_files(path,season):
     df_final["season"] = season
     return df_final
 
+
 def FEATURE_IMP(input,flag_trin_test):
     print("\nTraining independent models independientes...")
     df_winter = input["winter"]
@@ -945,6 +891,8 @@ def FEATURE_IMP(input,flag_trin_test):
     plt.xticks(rotation=45)
     plt.tick_params(axis='both', labelsize=14)
     plt.show(block=True)
+
+
 def tratamiento_XGB_season(input,test):
     print("\n--- Cross-season generalization ---")
     df_winter = input["winter"]
@@ -1046,6 +994,8 @@ def tratamiento_XGB_season(input,test):
         print(r)
 
     return prediction
+
+
 def tratamiento_SGDseason(input,test):
     print("\n--- Cross-season generalization ---")
     df_winter = input["winter"]
@@ -1179,6 +1129,8 @@ def tratamiento_SGDseason(input,test):
         print(r)
 
     return prediction
+
+
 def tratamiento_TKANseason(input,test):
     print("\n--- Cross-season generalization ---")
     df_winter = input["winter"]
@@ -1292,6 +1244,8 @@ def tratamiento_TKANseason(input,test):
         print(r)
 
     return prediction
+
+
 def tratamiento_XGB_WHOLE(X,y,X_t,y_t):
     print("\n--- WHOLE DATASET ---")
 
@@ -1352,6 +1306,8 @@ def tratamiento_XGB_WHOLE(X,y,X_t,y_t):
         print(r)
 
     return prediction
+
+
 def tratamiento_SGD_WHOLE(X,y,X_t,y_t):
     print("\n--- WHOLE DATASET ---")
 
@@ -1501,6 +1457,8 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t):
         print(r)
 
     return prediction,resultados_sgd_offline['drifts'],resultados_sgd_online['drifts']
+
+
 def tratamiento_TKAN_WHOLE(X,y,X_t,y_t):
     print("\n--- WHOLE DATASET ---")
     X_train = X[FEATURES_SV].values
@@ -1596,6 +1554,8 @@ def tratamiento_TKAN_WHOLE(X,y,X_t,y_t):
         print(r)
 
     return prediction,resultadosT_KAN['drifts']
+
+
 def train_model(df):
    X = df[FEATURES_SV]
    y = df["SV"]
@@ -1606,12 +1566,13 @@ def train_model(df):
         random_state=42)
    model.fit(X, y)
    return model
+
+
 def TRAIN_LINEARvelocity(input):
     models=[]
     return models
+
+
 def TRAIN_ANGULARvelocity(input):
     models=[]
     return models
-
-
-

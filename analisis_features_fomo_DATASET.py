@@ -74,12 +74,13 @@ FEATURES_L_W = [
     'ANG_VEL_y',
     'ANG_VEL_z'
 ]
-lABEL_L_W=['GT_LIN_VEL_x',
+LABEL_L_W=['GT_LIN_VEL_x',
     'GT_LIN_VEL_y',
     'GT_LIN_VEL_z',
     'GT_ANG_VEL_x',
     'GT_ANG_VEL_y',
     'GT_ANG_VEL_z']
+
 
 def get_season(fecha_str):
     fecha = datetime.strptime(fecha_str, "%Y-%m-%d")
@@ -99,6 +100,8 @@ def get_season(fecha_str):
         return "summer"
     else:
         return "autumn"
+
+
 def recorrer_fechas(ruta_base):
     train = {"winter": [], "spring": [], "summer": [], "autumn": []}
     test = {"winter": [], "spring": [], "summer": [], "autumn": []}
@@ -146,6 +149,8 @@ def recorrer_fechas(ruta_base):
     df_train_all = pd.concat(train_final.values(), axis=0)
     df_test_all = pd.concat(test_final.values(), axis=0)
     return train_final,test_final,df_train_all, df_test_all
+
+
 def analizar_directorio(ruta_red,season):
     METEO_PATH = ruta_red / "metadata"
 
@@ -159,6 +164,7 @@ def analizar_directorio(ruta_red,season):
     print("TRAJECTORY DATA: ", df_traj.shape)
 
     return df_meta, df_traj
+
 
 if __name__ == '__main__':
     # ============================================================
@@ -416,7 +422,7 @@ if __name__ == '__main__':
 
     '''
     pred_errores=[]
-    
+
     X_train = datasettrain[FEATURES_L_W]
     y_train1 = datasettrain["error_lin"]
     y_train1 = datasettrain["error_and"]
@@ -426,7 +432,7 @@ if __name__ == '__main__':
     y_test1 = datasettest["error_lin"]
     y_test2 = datasettest["error_ang"]
     X_test_gt = datasettest[["gt_x", "gt_y"]]
-    
+
     FEATURE_IMP(train_season)
     FEATURE_IMP(test_season)
 
@@ -436,4 +442,3 @@ if __name__ == '__main__':
     VISUALIZACION_MEJORA(train_season,test_season,pred_errores, 'PREDICTION WITH SV')'''
 
     print('FIN')
-
