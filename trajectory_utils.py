@@ -125,10 +125,9 @@ def orientations_from_positions(traj, speed_eps=2e-1):
             headings[pos_idx] = headings[pos_idx-1]
 
     # Remove jumps in headings, as they will lead to spikes in angular velocity
-    win_sz = 5
-    headings = [np.median(headings[i:i+win_sz]) for i in range(len(headings) - win_sz+1)] + list(headings)[-win_sz+1:]
+    win_sz = 3
+    headings = list(headings)[:win_sz] + [headings[i-win_sz:i+win_sz][win_sz] for i in range(win_sz, len(headings) - win_sz+1)] + list(headings)[-win_sz+1:]
     headings = [headings[0]] + headings
-
     for idx, theta in enumerate(headings):
         traj.poses_se3[idx][:2, :2] = np.array(
             [[np.cos(theta), np.sin(theta)],
@@ -224,6 +223,7 @@ def rmse(arr1, arr2):
         np.array(arr1) - np.array(arr2),
         axis=1
     )
+
 
 if __name__ == "__main__":
     from fomo_utils import get_trajectory_dir, get_odom_trajectory, get_gt_trajectory
