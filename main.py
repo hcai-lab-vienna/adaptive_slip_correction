@@ -1,12 +1,17 @@
 from fomo_utils import (
+    DEPLOYMENTS,
+    TRAJECTORIES,
     get_trajectory_dir,
     get_transforms,
     get_odom_trajectory,
     get_gt_trajectory,
-    get_imu_data
+    get_imu_data,
 )
-from imu_utils import estimate_gravity
-from trajectory_utils import orientations_from_positions, sync, reduce_to_ids, velocities_from_trajectories
+from imu_utils import mahony_filter, gravity_from_attitude, augment_odometry_with_imu
+from trajectory_utils import (orientations_from_positions,
+                              sync,
+                              reduce_to_ids,
+                              velocities_from_trajectories)
 
 
 if __name__ == "__main__":
@@ -14,9 +19,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "Adaptive slip correction.")
     parser.add_argument("-d", "--deployment", type=str, default="2024-11-21",
-                        help="Deployment folder.")
+                        help=f"Deployment folder. Valid options are {DEPLOYMENTS}")
     parser.add_argument("-t", "--trajectory", type=str, default="blue",
-                        help="Trajectory name.")
+                        help=f"Trajectory name. Valid options are {TRAJECTORIES}")
     args = parser.parse_args()
 
     ### Load data
@@ -24,7 +29,8 @@ if __name__ == "__main__":
     # Transforms
     transform_manager = get_transforms(trajectory_dir)
     # IMUs
-    accel, gyro, imu_timestamps = get_imu_data(trajectory_dir, imu='vectornav', tm=transform_manager)
+    imu_name = 'xsens'
+    accel, gyro, imu_timestamps = get_imu_data(trajectory_dir, imu=imu_name, tm=transform_manager)
     # Trajectories
     traj_gt = get_gt_trajectory(trajectory_dir)
     traj_gt_oriented, gt_headings = orientations_from_positions(traj_gt)
@@ -43,8 +49,26 @@ if __name__ == "__main__":
     lin_vel_twist_sync = lin_vel_twist[ids_odom]
     ang_vel_twist_sync = ang_vel_twist[ids_odom]
 
-    # Estimate the gravity vector
+    # Process the IMU
     freq = 200.0
-    g_body = estimate_gravity(accel, gyro, 1/freq, g=9.80665, kp=2.0, ki=0.05)
-    _, ids_imu = sync.matching_time_indices(traj_gt_sync.timestamps, imu_timestamps, max_diff=0.05)
-    g_body_sync = g_body[ids_imu]
+    imu_quats = mahony_filter(accel, gyro, imu_timestamps, g=9.80665, kp=1.0, ki=0.3)
+    # from ahrs.filters import Mahony
+    # orientation = Mahony(gyr=gyro, acc=accel, frequency=freq)
+
+    # Estimate the gravity vector
+    # g_body = gravity_from_attitude(imu_attitude_qs)
+
+    ids_odom_to_imu, ids_imu_to_odom = sync.matching_time_indices(
+        traj_odom.timestamps, imu_timestamps, max_diff=0.01)
+    traj_odom_imu = augment_odometry_with_imu(
+        reduce_to_ids(traj_odom, ids_odom_to_imu),
+        reduce_to_ids(lin_vel_twist, ids_odom_to_imu),
+        reduce_to_ids(imu_quats, ids_imu_to_odom)
+    )
+
+    import matplotlib.pyplot as plt
+    plt.plot(traj_odom_imu.positions_xyz[:,0], traj_odom_imu.positions_xyz[:,1])
+    plt.plot(traj_odom.positions_xyz[:,0], traj_odom.positions_xyz[:,1])
+    plt.plot(traj_gt.positions_xyz[:,0] - traj_gt.positions_xyz[0,0], traj_gt.positions_xyz[:,1] - traj_gt.positions_xyz[0, 1])
+
+    plt.show()
