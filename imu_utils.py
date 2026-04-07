@@ -103,7 +103,7 @@ def augment_odometry_with_imu(traj_odom, twist_lin, imu_quats, R_imu_to_base=np.
         pos[idx+1] = pos[idx] + np.array([dx, dy, 0.])
         yaw_prev = yaw
 
-    return PoseTrajectory3D(pos[1:], q[1:], traj_odom.timestamps[1:])
+    return PoseTrajectory3D(pos[1:], imu_quats[1:], traj_odom.timestamps[1:])
 
 
 def gravity_from_attitude(qs):
