@@ -231,12 +231,14 @@ if __name__ == "__main__":
     # Load data
     trajectory_dir = get_trajectory_dir("2024-11-21", 'blue')
     traj_gt = get_gt_trajectory(trajectory_dir)
-    traj_gt_oriented, gt_headings = orientations_from_positions(traj_gt)
+    # traj_gt_oriented, gt_headings = orientations_from_positions(traj_gt)
+    traj_gt_oriented = copy.deepcopy(traj_gt)
     traj_odom, lin_vel_twist, ang_vel_twist = get_odom_trajectory(trajectory_dir)
     delta_ts_twist = traj_odom.timestamps[1:] - traj_odom.timestamps[:-1]
 
     # Recover linear and angular velocities from trajectories
     lin_vel_gt, ang_vel_gt, traj_gt_oriented, p_rel_gt, delta_ts = velocities_from_trajectories(traj_gt_oriented)
+    vel = np.linalg.norm(np.array(p_rel_gt)[:,:3,3], axis=1) / delta_ts
 
     # Synchronize trajectories
     ids_gt, ids_odom = sync.matching_time_indices(traj_gt_oriented.timestamps, traj_odom.timestamps, max_diff=0.05)
@@ -256,6 +258,13 @@ if __name__ == "__main__":
 
     lin_vel_odom, ang_vel_odom, traj_odom, p_rel_odom, delta_ts_odom = velocities_from_trajectories(traj_odom)
     ids_gt, ids_odom = sync.matching_time_indices(traj_gt_oriented.timestamps, traj_odom.timestamps, max_diff=0.05)
+
+    import matplotlib.pyplot as plt
+    eps = 1e-1
+    plt.plot([(vgt- v[0]) / max(vgt, eps) for (v, vgt) in zip(lin_vel_twist_sync, vel)]);
+    plt.plot([v[0] for (v, vgt) in zip(lin_vel_twist_sync, vel)]);
+    plt.plot([vgt - 2. for (v, vgt) in zip(lin_vel_twist_sync, vel)]);
+    plt.show()
 
     # traj_odom lost the first element in the velocity computation, so we have to index from 1
     print("Odom-Twist linear velocity RMSE full traj.", rmse(lin_vel_twist[1:], lin_vel_odom).mean())
