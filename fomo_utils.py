@@ -92,6 +92,21 @@ def get_odom_trajectory(trajectory_dir):
     )
 
 
+def get_robot_cmd(trajectory_dir, return_df=False):
+    cmd = pd.read_csv(os.path.join(trajectory_dir, 'metadata', 'cmd_velocity.csv'))
+
+    if return_df:
+        cmd['timestamp'] = pd.to_datetime(cmd['timestamp'], unit='us')
+        cmd = cmd.set_index('timestamp')
+        return cmd
+
+    return (
+        np.array(cmd[['timestamp']] / 1e6),
+        np.array(cmd[['lx', 'ly', 'lz']]),
+        np.array(cmd[['ax', 'ay', 'az']])
+    )
+
+
 def get_imu_data(trajectory_dir, imu='vectornav', tm=None):
     assert imu in ['vectornav', 'xsens']
 
