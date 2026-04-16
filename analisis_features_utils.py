@@ -1469,6 +1469,7 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
                     linewidth=1, s=1)
         plt.scatter(horas, pred2, label="Prediction SGD Partial", color='b',
                     linewidth=1, s=1)
+        '''
         cont=0
         for d in drift1:
             if cont == 0:
@@ -1484,6 +1485,7 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
             else:
                 plt.axvline(x=d, color='green', linestyle='--', alpha=0.7)
             cont+=1
+        '''
         # Añadir texto en la figura (x, y son coordenadas normalizadas 0-1)
         plt.text(
             1.05, 0.1,  # posición a la derecha del plot
@@ -1592,6 +1594,7 @@ def tratamiento_TKAN_WHOLE(X,y,X_t,y_t,features):
         plt.title(f"Results for the day {fecha.date()}")
         plt.scatter(horas, reales, label="Real", color='r', linewidth=1, s=1)
         plt.scatter(horas, pred, label="Prediction TKAN", color='lightblue',linewidth=1, s=1)
+        '''
         cont = 0
         for d in drift1:
             if cont == 0:
@@ -1599,6 +1602,7 @@ def tratamiento_TKAN_WHOLE(X,y,X_t,y_t,features):
             else:
                 plt.axvline(x=d, color='brown', linestyle='--', alpha=0.7)
             cont += 1
+        '''
         # Añadir texto en la figura (x, y son coordenadas normalizadas 0-1)
         plt.text(
             1.05, 0.1,  # posición a la derecha del plot
@@ -1642,17 +1646,19 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
     indice = y_t.index
 
     lag = len(features)
-    pred = pd.Series(pred, index=indice[lag:])
 
     fechas_unicas = y_t.index.normalize().unique()
+
     for fecha in fechas_unicas:
         mask = (pd.to_datetime(indice[lag:]).normalize() == fecha)
+        pred = pd.Series(pred, index=indice[lag:])
 
         horas = indice[lag:][mask]
         reales = y_t[lag:][mask]
-        odom_lin_vel=X_t[lag:][mask]['lin_vel_odom_x']
+        odom_lin_vel = X_t[lag:][mask]['lin_vel_odom_x']
         odom_ang_vel = X_t[lag:][mask]['ang_vel_odom_z']
         pred = pred[mask]
+
         print(odom_ang_vel.shape[0],reales.shape[0],odom_lin_vel.shape[0],pred.shape[0])
 
         delta_ts = (horas[1:] - horas[:-1]) / np.timedelta64(1, 's')
@@ -1678,7 +1684,7 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
         plt.xlabel("Coord X")
         plt.ylabel('Coord Y')
         plt.show(block=True)
-    print('FIN')
+
 
 
 
