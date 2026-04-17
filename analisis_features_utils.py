@@ -36,6 +36,7 @@ from adaptive_slip_correction.fomo_utils import (
 from adaptive_slip_correction.imu_utils import mahony_filter, gravity_from_attitude, augment_odometry_with_imu
 from adaptive_slip_correction.trajectory_utils import (
     integrate_body_twists,
+    compute_rpe_from_rel_pose,
     sync,
     reduce_to_ids,
     relative_pose_from_trajectories,
@@ -627,12 +628,16 @@ def load_trajectory_data2(fecha,traj):
     DATASET = DATASET.set_index(odom_dt_index)
     DATASET = DATASET.dropna()
 
-    #plot_trajectories(traj_odom_imu, traj_odom, traj_gt)
+    print('Dimensiones DATASET ',DATASET.shape)
+    print('Dimensiones odom_POSITIONS ',traj_odom.positions_xyz.shape)
+    print('Dimensiones gt_POSITIONS ', traj_gt.positions_xyz.shape)
 
-    return DATASET
-def plot_trajectories(traj_odom_imu,traj_odom,traj_gt):
+    #plot_trajectories(fecha,traj_odom_imu, traj_odom, traj_gt)
+
+    return DATASET ,traj_odom.positions_xyz,traj_gt.positions_xyz
+def plot_trajectories(fecha,traj_odom_imu,traj_odom,traj_gt):
     plt.figure(figsize=(12, 5))
-    plt.title("PLOT trajectories")
+    plt.title(str(fecha)+" PLOT trajectories")
 
     plt.scatter(traj_odom_imu.positions_xyz[0, 0], traj_odom_imu.positions_xyz[0, 1],alpha=0.4,color='g',marker='o')
     plt.scatter(traj_odom_imu.positions_xyz[-1,0], traj_odom_imu.positions_xyz[-1,1],alpha=0.4,color='g',marker='o')
@@ -1659,6 +1664,18 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
         odom_ang_vel = X_t[lag:][mask]['ang_vel_odom_z']
         pred = pred[mask]
 
+        if fecha!="2024-11-28":
+            color='red'
+        else:
+            color = 'yellow'
+
+        fecha_str = fecha.date().strftime("%Y-%m-%d")
+        path_odom = NEW_FOMO_PATH + f"{fecha_str}_{color}_odom_position.csv"
+        path_gt = NEW_FOMO_PATH + f"{fecha_str}_{color}_gt_position.csv"
+
+        pos_odom = np.loadtxt(path_odom, delimiter=",")
+        pos_gt = np.loadtxt(path_gt, delimiter=",")
+
         print(odom_ang_vel.shape[0],reales.shape[0],odom_lin_vel.shape[0],pred.shape[0])
 
         delta_ts = (horas[1:] - horas[:-1]) / np.timedelta64(1, 's')
@@ -1667,19 +1684,37 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
         p_rel_gt_rec, p_gt_rec = integrate_body_twists(reales[1:], odom_ang_vel[1:], delta_ts)
         p_rel_odom_rec, p_odom_rec = integrate_body_twists(odom_lin_vel[1:], odom_ang_vel[1:], delta_ts)
         p_rel_pred_rec, p_pred_rec = integrate_body_twists(pred[1:], odom_ang_vel[1:], delta_ts)
+
         gtcoor_x = [M[0, 3] for M in p_rel_gt_rec]
-        gtcoor_y = [M[1, 1] for M in p_rel_gt_rec]
+        gtcoor_y = [M[1, 3] for M in p_rel_gt_rec]
         odomcoor_x = [M[0, 3] for M in p_rel_odom_rec]
-        odomcoor_y = [M[1, 1] for M in p_rel_odom_rec]
+        odomcoor_y = [M[1, 3] for M in p_rel_odom_rec]
         predcoor_x = [M[0, 3] for M in p_rel_pred_rec]
-        predcoor_y = [M[1, 1] for M in p_rel_pred_rec]
+        predcoor_y = [M[1, 3] for M in p_rel_pred_rec]
+
         fig, ax = plt.subplots(1, 1, figsize=(14, 7), sharey=False)
         titulo = str(title+ str (fecha))
         fig.suptitle(titulo, fontsize=16)
         plt.title(f"Results for the day {fecha.date()}")
-        plt.scatter(gtcoor_x,gtcoor_y, label="Real", color='r', linewidth=1, s=1)
-        plt.scatter(predcoor_x,predcoor_y, label="Prediction", color='blue', linewidth=1, s=1)
-        plt.scatter(odomcoor_x, odomcoor_y, label="Odometry corrected", color='g', linewidth=1, s=1)
+        plt.plot(np.array(gtcoor_x),np.array(gtcoor_y), label="Real", color='r', linewidth=1)
+        plt.plot(np.array(predcoor_x),np.array(predcoor_y), label="Prediction", color='blue', linewidth=1)
+        plt.plot(np.array(odomcoor_x), np.array(odomcoor_y), label="Odometry corrected", color='g', linewidth=1)
+
+        plt.scatter(pos_odom[0, 0], pos_odom[0, 1], alpha=0.4, color='turquoise',
+                    marker='o')
+        plt.scatter(pos_odom[-1, 0], pos_odom[-1, 1], alpha=0.4, color='turquoise',
+                    marker='o')
+        plt.plot(pos_odom[:, 0], pos_odom[:, 1], linestyle=':', color='turquoise',
+                 label='Correction')
+
+        plt.scatter(pos_gt[1, 0] - pos_gt[0, 0],
+                    pos_gt[1, 1] - pos_gt[0, 1], alpha=0.4, color='orange', marker='X')
+        plt.scatter(pos_gt[-1, 0] - pos_gt[-1, 0],
+            pos_gt[-1, 1] - pos_gt[0, 1],alpha=0.4, color='orange', marker='X')
+
+        plt.plot(pos_gt[:, 0] - pos_gt[0, 0],
+                 pos_gt[:, 1] - pos_gt[0, 1], color='orange', label='Ground Truth')
+
         plt.legend()
         plt.xlabel("Coord X")
         plt.ylabel('Coord Y')

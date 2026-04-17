@@ -321,10 +321,12 @@ def recorrer_fechas(ruta_base):
     return train_final,test_final,df_train_all, df_test_all
 def analizar_directorio(ruta_red,season,fecha,color="red"):
     print("Loading data...")
-    df_traj = load_trajectory_data2(fecha,color)
+    df_traj, pos_odom,pos_gt = load_trajectory_data2(fecha,color)
+
+    np.savetxt(NEW_FOMO_PATH + f"{fecha}_{color}_odom_position.csv", pos_odom, delimiter=",", fmt='%.18e')
+    np.savetxt(NEW_FOMO_PATH + f"{fecha}_{color}_gt_position.csv", pos_gt,delimiter=",", fmt='%.18e')
 
     METEO_PATH = ruta_red / "metadata"
-
     print("METADATA...")
     df_meta = load_meta(METEO_PATH, season)
 
