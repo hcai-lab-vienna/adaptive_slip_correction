@@ -49,9 +49,9 @@ from adaptive_slip_correction.trajectory_utils import (
 BASE_PATH = "..\\..\\..\\OSR\\code\\fomo-dataset"
 NEW_FOMO_PATH = "..\\..\\..\\OSR\\code\\New_fomo_DATASET\\"
 
-fechas_train = {"2025-01-10","2025-03-10", "2025-04-15","2025-09-24","2024-11-21","2025-08-20", "2025-10-14","2024-11-28"}#"2025-06-26",
-fechas_test = {"2025-01-30", "2025-05-28","2025-11-03"}
-fecha_SNOW_SNOWING_test = {"2025-03-10"}
+date_train = {"2025-01-10","2025-03-10", "2025-04-15","2025-09-24","2024-11-21","2025-08-20", "2025-10-14","2024-11-28"}#"2025-06-26",
+date_test = {"2025-01-30", "2025-05-28","2025-11-03"}
+date_SNOW_SNOWING_test = {"2025-03-10"}
 DRIVETRAIN_DATE=[("2025-01-10",1),("2025-03-10",1), ("2025-04-15",0),("2025-06-26",0),("2025-09-24",0),("2025-11-03",0),("2024-11-21",0),("2025-01-30",1),("2025-05-28",0),("2025-08-20",0),("2025-10-14",0),("2024-11-28",0)]
 CONDITIONS_DATE=[("2025-01-10",1),("2025-03-10",2), ("2025-04-15",4),("2025-06-26",3),("2025-09-24",3),("2025-11-03",4),("2024-11-21",3),("2025-01-30",1),("2025-05-28",3),("2025-08-20",3),("2025-10-14",3),("2024-11-28",1)]
 CONDITION_CLASSIFICATION_EXPLAINATION=[(1,'snow on the road, not snowing'),
@@ -64,98 +64,12 @@ CONDITION_CLASSIFICATION=[(1,'snow_road'),
                           (4,'clear_raining')]
 DRIVETRAIN_CLASSIFICATION=[(0,'Wheel'),(1,'Track')]
 
-'''FEATURES_METEO = [
-    'Rain_accumulation',
-    #'T_probe_Avg',
-    'RH',#%
-    #'T_DP',#C
-    #'CS106_Corrected_mbar',
-    'SnowDepth_Avg',
-    #'Drivetrain_type'
-]
-FEATURES_SV1 = [
-    'lin_acc_imu_x',
-    'lin_acc_imu_y',
-    'lin_acc_imu_z',
-    'ang_vel_imu_x',
-    'ang_vel_imu_y',
-    'ang_vel_imu_z',
-    'grav_x',
-    'grav_y',
-    'grav_z',
-    'lin_vel_odom_x',
-    'ang_vel_odom_z',
-    'lin_vel_cmd_x',
-    'ang_vel_cmd_z'
-]
-FEATURES_SV2 = [
-    'NORMA_lin_acc_imu',
-    'NORMA_ang_vel_imu',
-    'grav_x',
-    'grav_y',
-    'grav_z',
-    'lin_vel_twist',
-    'ang_vel_twist',
-    'lin_vel_cmd_x',
-    'ang_vel_cmd_z'
-]
-LABEL_SV='SV'
-numeric_limits_SV=[-5,0,5]
-FEATURES_L_W_1 = [
-    'lin_acc_imu_x',
-    'lin_acc_imu_y',
-    'lin_acc_imu_z',
-    'ang_vel_imu_x',
-    'ang_vel_imu_y',
-    'ang_vel_imu_z',
-    'grav_x',
-    'grav_y',
-    'grav_z',
-    'lin_vel_odom_x',
-    'ang_vel_odom_z',
-    'lin_vel_cmd_x',
-    'ang_vel_cmd_z'
-]
-FEATURES_L_W_2 = [
-    'NORMA_lin_acc_imu',
-    'NORMA_ang_vel_imu',
-    'grav_x',
-    'grav_y',
-    'grav_z',
-    'lin_vel_twist',
-    'ang_vel_twist',
-    'lin_vel_cmd_x',
-    'ang_vel_cmd_z'
-]
-lABEL_L_W='TARGET'# GT LINEAR VELOCITY
-'''
 
-def get_season(fecha_str):
-    fecha = datetime.strptime(fecha_str, "%Y-%m-%d")
-    year = fecha.year
-
-    # Definir límites
-    spring_start = datetime(year, 3, 20)
-    summer_start = datetime(year, 6, 21)
-    autumn_start = datetime(year, 9, 23)
-    winter_start = datetime(year, 12, 21)
-
-    if fecha >= winter_start or fecha < spring_start:
-        return "winter"
-    elif fecha >= spring_start and fecha < summer_start:
-        return "spring"
-    elif fecha >= summer_start and fecha < autumn_start:
-        return "summer"
-    else:
-        return "autumn"
-
-# Function to create the DataFrame with only the index
-def crear_dataframe_con_indices(indices):
-    # Crear un DataFrame vacío con el índice proporcionado
+def build_dataframe(indices):
     df = pd.DataFrame(index=indices)
     return df
 
-def rellenar_soil_Condition(df):
+def fill_soil_Condition(df):
     # make sure datetime in index
     df.index = pd.to_datetime(df.index)
     #  array to dic
@@ -185,9 +99,7 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
     tracemalloc.start()
     start_train = time.time()
 
-    # Entrenamiento inicial
     if((online==True) & (name!='T-KAN (real)')):
-        # Si modelo online, usar partial_fit con train
         model.partial_fit(X_train, y_train)
     else:
         model.fit(X_train, y_train)
@@ -200,15 +112,15 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
     #if name=='T-KAN (real)':
     # Inicializamos Page-Hinkley
     if flag==0:
-        ph = PageHinkley(delta=0.0019, lambda_=26,alpha=0.999)  # ajustar 
+        ph = PageHinkley(delta=0.0019, lambda_=26,alpha=0.999)  # To be adjusted
     elif flag==1:
-        ph = PageHinkley(delta=0.002, lambda_=20,alpha=0.999)  # ajustar
+        ph = PageHinkley(delta=0.002, lambda_=20,alpha=0.999)
     else:
-        ph = PageHinkley(delta=0.1, lambda_=150, alpha=0.95)  # ajustar
+        ph = PageHinkley(delta=0.1, lambda_=150, alpha=0.95)
 
 
     drifts = []
-    cooldown = 100  # mínimo número de pasos entre drifts consecutivos
+    cooldown = 100
     last_drift = -cooldown
 
     buffer_X = []
@@ -219,7 +131,6 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
         x = X_test[i].reshape(1, -1)
         y_true = y_test[i]
 
-        # Predicción
         if name=='T-KAN (real)':
             y_pred = float(model.predict(x))
             preds.append(y_pred)
@@ -227,7 +138,6 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
             y_pred = float((model.predict(x))[0])
             preds.append(y_pred)
 
-        # Actualización modelo si es online
         if online:
             #model.partial_fit(x, [y_true])
             buffer_X.append(x)
@@ -238,11 +148,9 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
                 buffer_y.pop(0)
             model.partial_fit(np.vstack(buffer_X), buffer_y)
 
-        # Calculamos error actual
-        error = y_true - y_pred  # Mantener signo para PH más sensible
+        error = y_true - y_pred
         drift = ph.update(error)
 
-        # Detectamos solo drifts separados por cooldown
         if drift and (i - last_drift) >= cooldown:
             drifts.append(i)
             last_drift = i
@@ -251,12 +159,10 @@ def evaluate_modelPH(name, model,X_train, y_train,X_test,y_test, flag,online=Fal
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    # Métricas
     mse = mean_squared_error(y_test, preds)
     mae = mean_absolute_error(y_test, preds)
     r2 = r2_score(y_test, preds)
 
-    # Imprimir resultados
     print("MSE:", mse)
     print("MAE:", mae)
     print("R2:", r2)
@@ -334,7 +240,6 @@ def fix_decimal(x, n_integer_digits=10):
 # ============================================================
 # LOAD and PREPROCESS FUNCTIONS
 # ============================================================
-
 def load_meta(path,season):
     print(path)
     # ---------- meteo ----------
@@ -346,17 +251,12 @@ def load_meta(path,season):
         meteo.drop('RECORD', axis=1, inplace=True)
         meteo["TIMESTAMP"]  = meteo["TIMESTAMP"] .astype(float)
 
-        # Mantener solo la primera aparición de cada timestamp
         meteo = meteo.drop_duplicates()
-        # Ordenar por tiempo
         meteo = meteo.sort_values("TIMESTAMP")
-        # Usar como índice
         meteo = meteo.set_index("TIMESTAMP")
-        #meteo["TIMESTAMP"] = meteo["TIMESTAMP"].apply(fix_decimal)
         meteo_all_zero = meteo.select_dtypes(include="number").columns[
             (meteo.select_dtypes(include="number") == 0).all()
         ]
-        #print(meteo_all_zero.tolist())
         meteo = meteo.loc[(meteo != 0).any(axis=1)]
         METEO_COLUMNS=['Rain_mm_Tot', 'Rain_accumulation','T_probe_Avg','RH_probe','T_DP_Probe','CS106_Corrected_mbar']
         METEO_COLUMNS=['Rain_accumulation','T_probe_Avg','RH_probe','T_DP_Probe','CS106_Corrected_mbar']
@@ -364,7 +264,7 @@ def load_meta(path,season):
         meteo = meteo.rename(columns={'RH_probe': 'RH', 'Rain_accumulation': 'Rain_accum'})
         meteo = meteo.apply(pd.to_numeric, errors="coerce")
     else:
-        print(f"⚠️ Archivo vacío o no válido: {file_meteo}")
+        print(f"⚠️ Empty file: {file_meteo}")
         file_meteo = f"{path}\meteo_data.dat"
 
         meteo = pd.read_csv(
@@ -375,15 +275,11 @@ def load_meta(path,season):
         )
         meteo.drop('RECORD', axis=1, inplace=True)
         meteo = meteo.drop_duplicates()
-        # Usar como índice
         meteo = meteo.set_index("TIMESTAMP")
-
-        #print('NAN', (meteo.isna().mean() * 100).sort_values(ascending=False))
 
         meteo_all_zero = meteo.select_dtypes(include="number").columns[
             (meteo.select_dtypes(include="number") == 0).all()
         ]
-        #print(meteo_all_zero.tolist())
 
         meteo = meteo.loc[(meteo != 0).any(axis=1)]
         METEO_COLUMNS = ['Rain_mm_Tot', 'Rain_accumulation', 'T_probe_Avg', 'RH_probe', 'T_DP_Probe',
@@ -399,19 +295,13 @@ def load_meta(path,season):
         snow.drop(1, axis=0, inplace=True) #NAN
         snow.drop('RECORD', axis=1, inplace=True)
         snow = snow.apply(pd.to_numeric, errors="coerce")
-        # Convertimos a float
         snow["TIMESTAMP"]=snow["TIMESTAMP"].astype(float)
-        #snow["TIMESTAMP"] = snow["TIMESTAMP"].apply(fix_decimal)
         snow = snow.drop_duplicates()
-        # Ordenar por tiempo
         snow = snow.sort_values("TIMESTAMP")
-        # Usar como índice
         snow = snow.set_index("TIMESTAMP")
-        #print('NAN',(snow.isna().mean() * 100).sort_values(ascending=False))
         snow_all_zero = snow.select_dtypes(include="number").columns[
             (snow.select_dtypes(include="number") == 0).all()
         ]
-        #print(snow_all_zero.tolist())
         cols = [c for c in snow.columns if str(c).startswith("SDMS40_Distance_Points")]
         snow["SDMS40_Distance_Avg"] = snow[cols].mean(axis=1)
         SNOW_COLUMNS = ['SDMS40_Depth_Avg', 'SDMS40_Board_Temperature',
@@ -420,7 +310,7 @@ def load_meta(path,season):
         snow = snow[SNOW_COLUMNS]
         snow = snow.rename(columns={'SDMS40_Depth_Avg': 'SnowDepth_Avg'})
     else:
-        print(f"⚠️ Archivo vacío o no válido: {file_path}")
+        print(f"⚠️ Empty file: {file_path}")
         file_path = f"{path}\snow_data.dat"
         snow = pd.read_csv(
             file_path,
@@ -430,13 +320,10 @@ def load_meta(path,season):
         )
         snow.drop('RECORD', axis=1, inplace=True)
         snow = snow.drop_duplicates()
-        # Usar como índice
         snow = snow.set_index("TIMESTAMP")
-        #print('NAN', (snow.isna().mean() * 100).sort_values(ascending=False))
         snow_all_zero = snow.select_dtypes(include="number").columns[
             (snow.select_dtypes(include="number") == 0).all()
         ]
-        #print(snow_all_zero.tolist())
         cols = [c for c in snow.columns if str(c).startswith("SDMS40_Distance_Points")]
         snow["SDMS40_Distance_Avg"] = snow[cols].mean(axis=1)
         SNOW_COLUMNS = ['SDMS40_Depth_Avg', 'SDMS40_Board_Temperature',
@@ -446,14 +333,13 @@ def load_meta(path,season):
         snow = snow[SNOW_COLUMNS]
         snow = snow.rename(columns={'SDMS40_Depth_Avg': 'SnowDepth_Avg'})
 
-    #Calculamos el indice comun
     dftmp = [meteo, snow]
     dfs_validostmp = []
     for df in dftmp:
         if df is not None and not df.empty:
             dfs_validostmp.append(df)
         else:
-            print(" DataFrame vacío descartado")
+            print(" Empty DataFrame")
     flag_INTERSECTION=0
     if len(dfs_validostmp) != 0:
         for df in dfs_validostmp:
@@ -466,7 +352,6 @@ def load_meta(path,season):
             flag_INTERSECTION=1
         else:
             print("There is intersection")
-            #print(interseccion)
 
             start = max(df.index.min() for df in dfs_validostmp)
             end = min(df.index.max() for df in dfs_validostmp)
@@ -475,19 +360,13 @@ def load_meta(path,season):
         tmp_index = dfs_validostmp[0].index
 
         # ---------- TERRAIN ----------
-        # Crear el DataFrame con solo los índices
-        df_terreno = crear_dataframe_con_indices(tmp_index)
-
-        # Rellenar las columnas específicas
-        df_terreno = rellenar_soil_Condition(df_terreno)
+        df_terreno = build_dataframe(tmp_index)
+        df_terreno = fill_soil_Condition(df_terreno)
 
         name_file=str('Terrain_')+str(season)+str('.csv')
         df_terreno.to_csv(f"{path}/{name_file}",sep=',', header=True,index=True)
-
-        # salvar el DataFrame final
-        #print(df_terreno)
     else:
-        print(f"⚠️ DATAFRAME TERAIN vacío.")
+        print(f"⚠️ EMPTY DATAFRAME.")
         df_terreno = pd.DataFrame()
 
     # ---------- MERGE ----------
@@ -497,12 +376,12 @@ def load_meta(path,season):
         if df is not None and not df.empty:
             dfs_validos.append(df)
         else:
-            print(" DataFrame vacío descartado")
+            print(" Empty DataFrame")
 
     if len(dfs_validostmp) != 0:
         if flag_INTERSECTION!=0:
             first_valid_value = snow['SnowDepth_Avg'].iloc[0]
-            master_index = dfs_validostmp[0].index  # odom NEED TO BE ONE AT THE END. ( THe SAME)
+            master_index = dfs_validostmp[0].index
             aligned = []
             for df in dfmeteo:
                 df_interp = (
@@ -513,7 +392,7 @@ def load_meta(path,season):
             df_meteo_final = pd.concat(aligned, axis=1)
             df_meteo_final['SnowDepth_Avg']=first_valid_value
         else:
-            master_index = dfs_validostmp[0].index  # odom NEED TO BE ONE AT THE END. ( THe SAME)
+            master_index = dfs_validostmp[0].index
             aligned = []
             for df in dfmeteo:
                 df_interp = (
@@ -522,7 +401,7 @@ def load_meta(path,season):
                 aligned.append(df_interp)
             df_meteo_final = pd.concat(aligned, axis=1)
     else:
-        print(f"⚠️ DATAFRAME FINAL vacío.")
+        print(f"⚠️ Final DATAFRAME:EMPTY.")
         df_meteo_final = pd.DataFrame()
 
     return df_meteo_final
@@ -580,12 +459,6 @@ def load_trajectory_data2(fecha,traj):
     gt_df = gt_df.set_index('ts')
     gt_df = gt_df.reindex(odom_dt_index, method='nearest', tolerance=pd.Timedelta('50ms')).interpolate(method='time')
 
-    '''p_rel_gt = relative_pose_from_trajectories([traj_gt])[0]
-    delta_ts_gt = traj_gt.timestamps[1:] - traj_gt.timestamps[:-1]
-    vel_gt_COMP = [velocities_from_deltaT(dT, dt) for dT, dt in zip(p_rel_gt, delta_ts_gt)]
-    lin_vel_gt = [vl for vl, va in vel_gt_COMP]
-    ang_vel_gt = [va for vl, va in vel_gt_COMP]'''
-
     DATASET = pd.DataFrame(
         np.hstack([
             accel_grav_compensated_sync,
@@ -629,12 +502,12 @@ def load_trajectory_data2(fecha,traj):
     DATASET = DATASET.dropna()
 
     print('Dimensiones DATASET ',DATASET.shape)
-    print('Dimensiones odom_POSITIONS ',traj_odom.positions_xyz.shape)
+    print('Dimensiones odom_POSITIONS ',traj_odom_imu.positions_xyz.shape)
     print('Dimensiones gt_POSITIONS ', traj_gt.positions_xyz.shape)
 
-    #plot_trajectories(fecha,traj_odom_imu, traj_odom, traj_gt)
+    plot_trajectories(fecha,traj_odom_imu, traj_odom, traj_gt)
 
-    return DATASET ,traj_odom.positions_xyz,traj_gt.positions_xyz
+    return DATASET ,traj_odom_imu.positions_xyz,traj_gt.positions_xyz
 def plot_trajectories(fecha,traj_odom_imu,traj_odom,traj_gt):
     plt.figure(figsize=(12, 5))
     plt.title(str(fecha)+" PLOT trajectories")
@@ -715,7 +588,7 @@ def FEATURE_IMP(input,flag_trin_test, features,taget_lab):
         index=features
     )'''
     print(features)
-    print("\nImportancia de variables:")
+    print("\nFeature Importance:")
     print(fi)
     if flag_trin_test==0:
         name=' TRAIN'
@@ -730,7 +603,7 @@ def FEATURE_IMP(input,flag_trin_test, features,taget_lab):
     plt.tick_params(axis='both', labelsize=9)
     plt.show(block=True)
 
-def tratamiento_XGB_season(input,test,features,LABEL_SV):
+def treatment_XGB_season(input,test,features,LABEL_SV):
     print("\n--- Cross-season generalization ---")
     df_snow_road = input[1]
     df_clear_road = input[2]
@@ -773,7 +646,7 @@ def tratamiento_XGB_season(input,test,features,LABEL_SV):
             DATOS_TEST,
             LABELS_TEST
     ):
-        print(f"Entrenando condiciones: {est1}")
+        print(f"Training conditions: {est1}")
 
         modelxgb = XGBRegressor(
             n_estimators=200,
@@ -802,7 +675,7 @@ def tratamiento_XGB_season(input,test,features,LABEL_SV):
                 DATOS_TEST,
                 LABELS_TEST
         ):
-            print(f"Predicion condiciones: {est2}")
+            print(f"Prediction conditions: {est2}")
             print("Train size:", X_train.shape)
             print("Test size:", X_test.shape)
             print(INDICES[contador].shape)
@@ -848,10 +721,10 @@ def tratamiento_XGB_season(input,test,features,LABEL_SV):
         values="r2"
     )
 
-    print("Matriz MAE:")
+    print("Matrix MAE:")
     print(matriz_mae)
 
-    print("\nMatriz R2:")
+    print("\nMatrix R2:")
     print(matriz_r2)
 
     plt.figure(figsize=(6, 5))
@@ -864,7 +737,7 @@ def tratamiento_XGB_season(input,test,features,LABEL_SV):
     plt.title("XGB R2 (train vs test)")
     plt.show()
 
-def tratamiento_SGDseason(input,test,features,LABEL_SV):
+def treatment_SGDseason(input,test,features,LABEL_SV):
     print("\n--- Cross-season generalization ---")
     df_snow_road = input[1]
     df_clear_road = input[2]
@@ -907,7 +780,7 @@ def tratamiento_SGDseason(input,test,features,LABEL_SV):
             DATOS_TEST,
             LABELS_TEST
     ):
-        print(f"Entrenando condiciones: {est1}")
+        print(f"Training Conditions: {est1}")
 
         x_scaler = StandardScaler()
         y_scaler = StandardScaler()
@@ -930,7 +803,7 @@ def tratamiento_SGDseason(input,test,features,LABEL_SV):
             X_test = x_scaler.transform(X_test)
             y_test = y_scaler.transform(y_test.reshape(-1, 1)).flatten()
 
-            print(f"Predicion condiciones: {est2}")
+            print(f"Prediction Conditions: {est2}")
             print("Train size:", X_train.shape)
             print("Test size:", X_test.shape)
             print(INDICES[contador].shape)
@@ -1010,10 +883,10 @@ def tratamiento_SGDseason(input,test,features,LABEL_SV):
         values="r2"
     )
 
-    print("Matriz MAE:")
+    print("Matrix MAE:")
     print(matriz_mae)
 
-    print("\nMatriz R2:")
+    print("\nMatrix R2:")
     print(matriz_r2)
 
     plt.figure(figsize=(6, 5))
@@ -1026,7 +899,7 @@ def tratamiento_SGDseason(input,test,features,LABEL_SV):
     plt.title("SGD R2 (train vs test)")
     plt.show()
 
-def tratamiento_SGDPARTIALseason(input,test,features,LABEL_SV):
+def treatment_SGDPARTIALseason(input,test,features,LABEL_SV):
     print("\n--- Cross-season generalization ---")
     df_snow_road = input[1]
     df_clear_road = input[2]
@@ -1069,7 +942,7 @@ def tratamiento_SGDPARTIALseason(input,test,features,LABEL_SV):
             DATOS_TEST,
             LABELS_TEST
     ):
-        print(f"Entrenando condiciones: {est1}")
+        print(f"Training Conditions: {est1}")
 
         x_scaler = StandardScaler()
         y_scaler = StandardScaler()
@@ -1092,7 +965,7 @@ def tratamiento_SGDPARTIALseason(input,test,features,LABEL_SV):
             X_test = x_scaler.transform(X_test)
             y_test = y_scaler.transform(y_test.reshape(-1, 1)).flatten()
 
-            print(f"Predicion condiciones: {est2}")
+            print(f"Prediction Conditions: {est2}")
             print("Train size:", X_train.shape)
             print("Test size:", X_test.shape)
             print(INDICES[contador].shape)
@@ -1170,10 +1043,10 @@ def tratamiento_SGDPARTIALseason(input,test,features,LABEL_SV):
         values="r2"
     )
 
-    print("Matriz MAE:")
+    print("Matrix MAE:")
     print(matriz_mae)
 
-    print("\nMatriz R2:")
+    print("\nMatrix R2:")
     print(matriz_r2)
 
     plt.figure(figsize=(6, 5))
@@ -1186,7 +1059,7 @@ def tratamiento_SGDPARTIALseason(input,test,features,LABEL_SV):
     plt.title(" SGD PARTIAL FIT R2 (train vs test)")
     plt.show()
 
-def tratamiento_TKANseason(input,test,features,LABEL_SV):
+def treatment_TKANseason(input,test,features,LABEL_SV):
     print("\n--- Cross-season generalization ---")
     df_snow_road = input[1]
     df_clear_road = input[2]
@@ -1229,7 +1102,7 @@ def tratamiento_TKANseason(input,test,features,LABEL_SV):
             DATOS_TEST,
             LABELS_TEST
     ):
-        print(f"Entrenando condiciones: {est1}")
+        print(f"Training Conditions: {est1}")
 
         x_scaler = StandardScaler()
         y_scaler = StandardScaler()
@@ -1252,7 +1125,7 @@ def tratamiento_TKANseason(input,test,features,LABEL_SV):
             X_test = x_scaler.transform(X_test)
             y_test = y_scaler.transform(y_test.reshape(-1, 1)).flatten()
 
-            print(f"Predicion condiciones: {est2}")
+            print(f"Prediction Conditions: {est2}")
             print("Train size:", X_train.shape)
             print("Test size:", X_test.shape)
             print(INDICES[contador].shape)
@@ -1309,10 +1182,10 @@ def tratamiento_TKANseason(input,test,features,LABEL_SV):
         values="r2"
     )
 
-    print("Matriz MAE:")
+    print("Matrix MAE:")
     print(matriz_mae)
 
-    print("\nMatriz R2:")
+    print("\nMatrix R2:")
     print(matriz_r2)
 
     plt.figure(figsize=(6, 5))
@@ -1325,7 +1198,7 @@ def tratamiento_TKANseason(input,test,features,LABEL_SV):
     plt.title("TKAN R2 (train vs test)")
     plt.show()
 
-def tratamiento_XGB_WHOLE(X,y,X_t,y_t,features):
+def treatment_XGB_WHOLE(X,y,X_t,y_t,features):
     print("\n--- WHOLE DATASET ---")
 
     X_train = X[features].values
@@ -1385,7 +1258,7 @@ def tratamiento_XGB_WHOLE(X,y,X_t,y_t,features):
         print(r)
 
     return prediction
-def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
+def treatment_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
     print("\n--- WHOLE DATASET ---")
 
     X_train = X[features].values
@@ -1419,7 +1292,7 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
     sgd1 = SGDRegressor(
         max_iter=1,
         warm_start=True,
-        loss='epsilon_insensitive',  # Passive Aggressive Esto actúa como SVR online.
+        loss='epsilon_insensitive',  # Passive Aggressive == SVR online.
         learning_rate='pa1',
         eta0=1,
         alpha=0.001,
@@ -1491,30 +1364,30 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
                 plt.axvline(x=d, color='green', linestyle='--', alpha=0.7)
             cont+=1
         '''
-        # Añadir texto en la figura (x, y son coordenadas normalizadas 0-1)
+        #
         plt.text(
-            1.05, 0.1,  # posición a la derecha del plot
+            1.05, 0.1,
             f"SGD MAE = {mae_fit:.3f}",
             transform=ax.transAxes,
             fontsize=8,
             verticalalignment='center'
         )
         plt.text(
-            1.05, 0.2,  # posición a la derecha del plot
+            1.05, 0.2,
             f"SGD R2 = {r2fit:.3f}",
             transform=ax.transAxes,
             fontsize=8,
             verticalalignment='center'
         )
         plt.text(
-            1.05, 0.3,  # posición a la derecha del plot
+            1.05, 0.3,
             f"SGD Partial MAE = {mae_partial:.3f}",
             transform=ax.transAxes,
             fontsize=8,
             verticalalignment='center'
         )
         plt.text(
-            1.05, 0.4,  # posición a la derecha del plot
+            1.05, 0.4,
             f"SGD Partial R2 = {r2partial:.3f}",
             transform=ax.transAxes,
             fontsize=8,
@@ -1538,7 +1411,7 @@ def tratamiento_SGD_WHOLE(X,y,X_t,y_t,features,label_target):
         print(r)
 
     return prediction,resultados_sgd_offline['drifts'],resultados_sgd_online['drifts']
-def tratamiento_TKAN_WHOLE(X,y,X_t,y_t,features):
+def treatment_TKAN_WHOLE(X,y,X_t,y_t,features):
     print("\n--- WHOLE DATASET ---")
     X_train = X[features].values
     y_train = y.values
@@ -1608,16 +1481,16 @@ def tratamiento_TKAN_WHOLE(X,y,X_t,y_t,features):
                 plt.axvline(x=d, color='brown', linestyle='--', alpha=0.7)
             cont += 1
         '''
-        # Añadir texto en la figura (x, y son coordenadas normalizadas 0-1)
+
         plt.text(
-            1.05, 0.1,  # posición a la derecha del plot
+            1.05, 0.1,
             f"SGD MAE = {mae_tkan:.3f}",
             transform=ax.transAxes,
             fontsize=8,
             verticalalignment='center'
         )
         plt.text(
-            1.05, 0.2,  # posición a la derecha del plot
+            1.05, 0.2,
             f"SGD R2 = {r2tkan:.3f}",
             transform=ax.transAxes,
             fontsize=8,
@@ -1647,15 +1520,15 @@ def train_model(df,features,target_label):
         random_state=42)
    model.fit(X, y)
    return model
-def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
+def IMPROVEMENT_VISUALIZATION(X_t,y_t,pred,features,lab_target,title):
     indice = y_t.index
 
     lag = len(features)
 
     fechas_unicas = y_t.index.normalize().unique()
 
-    for fecha in fechas_unicas:
-        mask = (pd.to_datetime(indice[lag:]).normalize() == fecha)
+    for mydate in fechas_unicas:
+        mask = (pd.to_datetime(indice[lag:]).normalize() == mydate)
         pred = pd.Series(pred, index=indice[lag:])
 
         horas = indice[lag:][mask]
@@ -1664,12 +1537,12 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
         odom_ang_vel = X_t[lag:][mask]['ang_vel_odom_z']
         pred = pred[mask]
 
-        if fecha!="2024-11-28":
+        if mydate!="2024-11-28":
             color='red'
         else:
             color = 'yellow'
 
-        fecha_str = fecha.date().strftime("%Y-%m-%d")
+        fecha_str = mydate.date().strftime("%Y-%m-%d")
         path_odom = NEW_FOMO_PATH + f"{fecha_str}_{color}_odom_position.csv"
         path_gt = NEW_FOMO_PATH + f"{fecha_str}_{color}_gt_position.csv"
 
@@ -1693,9 +1566,9 @@ def VISUALIZACION_MEJORA(X_t,y_t,pred,features,lab_target,title):
         predcoor_y = [M[1, 3] for M in p_rel_pred_rec]
 
         fig, ax = plt.subplots(1, 1, figsize=(14, 7), sharey=False)
-        titulo = str(title+ str (fecha))
+        titulo = str(title+ str (mydate))
         fig.suptitle(titulo, fontsize=16)
-        plt.title(f"Results for the day {fecha.date()}")
+        plt.title(f"Results for the day {mydate.date()}")
         plt.plot(np.array(gtcoor_x),np.array(gtcoor_y), label="Real", color='r', linewidth=1)
         plt.plot(np.array(predcoor_x),np.array(predcoor_y), label="Prediction", color='blue', linewidth=1)
         plt.plot(np.array(odomcoor_x), np.array(odomcoor_y), label="Odometry corrected", color='g', linewidth=1)

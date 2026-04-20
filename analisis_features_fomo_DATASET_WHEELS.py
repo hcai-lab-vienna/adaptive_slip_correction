@@ -1,6 +1,5 @@
 import pandas as pd
 
-from BOKU.analisis_features_utils import tratamiento_SGDPARTIALseason
 
 pd.set_option('display.float_format', '{:.4f}'.format)
 import numpy as np
@@ -9,9 +8,9 @@ from scipy.signal import savgol_filter
 import os
 from pathlib import Path
 from datetime import datetime
-from analisis_features_utils import (tratamiento_XGB_WHOLE,tratamiento_SGD_WHOLE,tratamiento_TKAN_WHOLE,
-                                     load_meta,load_trajectory_data2,FEATURE_IMP,tratamiento_SGDseason,
-                                     tratamiento_XGB_season,VISUALIZACION_MEJORA)
+from analisis_features_utils import (treatment_XGB_WHOLE,treatment_SGD_WHOLE,treatment_TKAN_WHOLE,
+                                     load_meta,load_trajectory_data2,FEATURE_IMP,treatment_SGDseason,
+                                     treatment_XGB_season,IMPROVEMENT_VISUALIZATION)
 
 # ============================================================
 # CONFIGURATION
@@ -19,9 +18,9 @@ from analisis_features_utils import (tratamiento_XGB_WHOLE,tratamiento_SGD_WHOLE
 BASE_PATH = "..\\..\\..\\OSR\\code\\fomo-dataset"
 NEW_FOMO_PATH = "..\\..\\..\\OSR\\code\\New_fomo_DATASET\\"
 
-fechas_train = {"2025-04-15","2025-09-24","2024-11-21","2025-08-20", "2025-10-14","2024-11-28"}#"2025-06-26",
-fechas_test = { "2025-05-28","2025-11-03"}
-fecha_SNOW_road_test = {"2024-11-28"}
+date_train = {"2025-04-15","2025-09-24","2024-11-21","2025-08-20", "2025-10-14","2024-11-28"}#"2025-06-26",
+date_test = { "2025-05-28","2025-11-03"}
+date_SNOW_road_test = {"2024-11-28"}
 CONDITIONS_DATE=[ ("2025-04-15",3),("2025-06-26",2),("2025-09-24",2),("2025-11-03",3),("2024-11-21",2),("2025-05-28",2),("2025-08-20",2),("2025-10-14",2),("2024-11-28",1)]
 CONDITION_CLASSIFICATION_EXPLAINATION=[(1,'snow on the road, not snowing'),
                           (2,'clear road, not raining'),
@@ -111,7 +110,7 @@ def get_season(fecha_str):
         return "summer"
     else:
         return "autumn"
-def recorrer_fechas(ruta_base):
+def through_date(ruta_base):
     # Dictionary: DATE -> condition
     date_to_condition = dict(CONDITIONS_DATE)
 
@@ -133,8 +132,8 @@ def recorrer_fechas(ruta_base):
         season = get_season(fecha_dir)
         print(f"\n {fecha_dir} → {season}")
 
-        es_train = fecha_dir in fechas_train
-        es_test = fecha_dir in fechas_test
+        es_train = fecha_dir in date_train
+        es_test = fecha_dir in date_test
 
         # obtener condición desde el mapping
         cond_id = date_to_condition.get(fecha_dir)
@@ -341,7 +340,7 @@ if __name__ == '__main__':
     # LOAD DATA
     # ============================================================
     if( (os.path.exists(NEW_FOMO_PATH+"snow_roadtrain.csv")) & (os.path.exists(NEW_FOMO_PATH+"DATASET_TEST.csv")) & (os.path.exists(NEW_FOMO_PATH+"DATASET_TRAIN.csv"))):
-        print("El archivo existe")
+        print("The file exist")
         datasettrain = pd.read_csv(NEW_FOMO_PATH + "DATASET_TRAIN.csv")
         datasettest = pd.read_csv(NEW_FOMO_PATH + "DATASET_TEST.csv")
         # Use as index
@@ -354,13 +353,13 @@ if __name__ == '__main__':
             file_path = os.path.join(NEW_FOMO_PATH, f"{cond_name}train.csv")
             train_condition[cond_id] = pd.read_csv(file_path, index_col=0)
 
-        # Construir test
+        # BUILD test
         for cond_id, cond_name in CONDITION_CLASSIFICATION:
             file_path = os.path.join(NEW_FOMO_PATH, f"{cond_name}test.csv")
             test_condition[cond_id] = pd.read_csv(file_path, index_col=0)
     else:
-        print("El archivo NO existe")
-        train_condition,test_condition,datasettrain, datasettest = recorrer_fechas(BASE_PATH)
+        print("The file doesn't exist")
+        train_condition,test_condition,datasettrain, datasettest = through_date(BASE_PATH)
         datasettrain.to_csv(NEW_FOMO_PATH + "DATASET_TRAIN.csv", index=True)
         datasettest.to_csv(NEW_FOMO_PATH + "DATASET_TEST.csv", index=True)
 
@@ -401,7 +400,7 @@ if __name__ == '__main__':
     length_fetauresSV=[len(FEATURES1),len(FEATURES2)]
     length_fetauresSV = [len(FEATURES1) ]
 
-    #ANALISIS POR CONDICIONES
+    # CONDITIONS ANALYSIS
     for opt in POSIBILIDAD_FEATURES:
         X_train = datasettrain[opt]
         datasettrain.index = pd.to_datetime(datasettrain.index)
@@ -411,18 +410,18 @@ if __name__ == '__main__':
         datasettest.index = pd.to_datetime(datasettest.index)
         y_test = datasettest["SV"]
 
-        '''tratamiento_XGB_season(train_condition,test_condition,opt,'SV')
-        tratamiento_SGDseason(train_condition,test_condition,opt,'SV')
-        tratamiento_SGDPARTIALseason(train_condition, test_condition, opt, 'SV')'''
+        '''treatment_XGB_season(train_condition,test_condition,opt,'SV')
+        treatment_SGDseason(train_condition,test_condition,opt,'SV')
+        treatment_SGDPARTIALseason(train_condition, test_condition, opt, 'SV')'''
 
 
-        predictionSGD, SGDFITdrifts, SGDPartialdrifts = tratamiento_SGD_WHOLE(X_train, y_train, X_test, y_test, opt,"SV")
+        predictionSGD, SGDFITdrifts, SGDPartialdrifts = treatment_SGD_WHOLE(X_train, y_train, X_test, y_test, opt,"SV")
 
-        print('Drift detectados por SGD: ', datasettest.index[SGDFITdrifts])
-        print('Drift detectados por Partial SGD: ', datasettest.index[SGDPartialdrifts])
+        print('Drifts detected by means of SGD: ', datasettest.index[SGDFITdrifts])
+        print('Drifts detected by means of Partial SGD: ', datasettest.index[SGDPartialdrifts])
         pred_SV.append(predictionSGD[1])
-        # TKANpred,TKANdrfts=tratamiento_TKAN_WHOLE(X_train, y_train, X_test, y_test,opt)
-        # print('Drift detectados por TKAN: ', datasettest.index[TKANdrfts])
+        # TKANpred,TKANdrfts=treatment_TKAN_WHOLE(X_train, y_train, X_test, y_test,opt)
+        # print('Drifts detected by means of TKAN: ', datasettest.index[TKANdrfts])
 
     snow_road = datasettrain[datasettrain['Soil_type'] == 1]["SV"]
     clear_road = datasettrain[datasettrain['Soil_type'] == 2]["SV"]
@@ -440,7 +439,7 @@ if __name__ == '__main__':
     print('MEDIA  clear_rainig_mean ', clear_rainig_mean)
 
     '''
-    # Agrupar por fecha (día)
+    # Group by date (day)
     for fecha, grupo in snow_road.groupby(snow_road.index.date):
         fig = plt.figure(figsize=(15, 5))
         ax = fig.add_subplot(111)
@@ -469,7 +468,7 @@ if __name__ == '__main__':
         plt.show()
 
     
-    # Agrupar por fecha (día)
+    # Group by date (day)
     for fecha, grupo in clear_road.groupby(clear_road.index.date):
         fig = plt.figure(figsize=(15, 5))
         ax = fig.add_subplot(111)
@@ -497,7 +496,7 @@ if __name__ == '__main__':
         plt.tight_layout()
         plt.show()
 
-    # Agrupar por fecha (día)
+    # Group by date (day)
     for fecha, grupo in clear_raining.groupby(clear_raining.index.date):
         fig = plt.figure(figsize=(15, 5))
         ax = fig.add_subplot(111)
@@ -627,16 +626,16 @@ if __name__ == '__main__':
             else:
                 df.loc[df.index[:], 'SV'] = pred_SV[cont][tmp:]
 
-        #tratamiento_XGB_season(train_condition,test_condition,opt,'TARGET')
-        #tratamiento_SGDseason(train_condition,test_condition,opt,'TARGET')
-        #tratamiento_SGDPARTIALseason(train_condition, test_condition, opt, 'TARGET')
+        #treatment_XGB_season(train_condition,test_condition,opt,'TARGET')
+        #treatment_SGDseason(train_condition,test_condition,opt,'TARGET')
+        #treatment_SGDPARTIALseason(train_condition, test_condition, opt, 'TARGET')
 
-        predictionSGD, SGDFITdrifts, SGDPartialdrifts = tratamiento_SGD_WHOLE(X_train, y_train1, X_test, y_test1, opt,"TARGET")
-        print('Drift detectados por SGD: ', datasettest.index[SGDFITdrifts])
-        print('Drift detectados por Partial SGD: ', datasettest.index[SGDPartialdrifts])
+        predictionSGD, SGDFITdrifts, SGDPartialdrifts = treatment_SGD_WHOLE(X_train, y_train1, X_test, y_test1, opt,"TARGET")
+        print('Drifts detected by means of SGD: ', datasettest.index[SGDFITdrifts])
+        print('Drifts detected by means of Partial SGD: ', datasettest.index[SGDPartialdrifts])
         pred_LIN_VEL.append(predictionSGD[1])
 
-        VISUALIZACION_MEJORA(X_test,y_test1,pred_LIN_VEL[0],opt,"TARGET",'Trajectory Visualization for :')
+        IMPROVEMENT_VISUALIZATION(X_test,y_test1,pred_LIN_VEL[0],opt,"TARGET",'Trajectory Visualization for :')
         cont+=1
 
     print('FIN')
