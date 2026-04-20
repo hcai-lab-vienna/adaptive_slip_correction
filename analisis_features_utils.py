@@ -1537,7 +1537,7 @@ def IMPROVEMENT_VISUALIZATION(X_t,y_t,pred,features,lab_target,title):
         odom_ang_vel = X_t[lag:][mask]['ang_vel_odom_z']
         pred = pred[mask]
 
-        if mydate!="2024-11-28":
+        if mydate!=pd.Timestamp('2024-11-28 00:00:00'):
             color='red'
         else:
             color = 'yellow'
