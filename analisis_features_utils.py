@@ -452,7 +452,7 @@ def load_trajectory_data2(fecha,traj):
     print(len(lin_vel_odom_imu))
     print(len(ang_vel_odom_imu))
 
-    #odom_rpe = compute_rpe_from_rel_pose(traj_gt.poses_se3, p_rel_odom_imu)
+    odom_rpe = compute_rpe_from_rel_pose(traj_gt.poses_se3, p_rel_odom_imu)
 
     DATASET = pd.DataFrame(
         np.hstack([
@@ -2656,17 +2656,6 @@ def IMPROVEMENT_VISUALIZATION(X_t,y_t,pred,features,lab_target,title):
 
         print(odom_ang_vel.shape[0], reales.shape[0], odom_lin_vel.shape[0], pred.shape[0])
 
-        # ODOM trajectory
-        traj_odom = get_odom_trajectoryMA(NEW_FOMO_PATH,f"{fecha_str}_{color}_output.txt")
-
-        if traj_odom.num_poses>odom_ang_vel.shape[0]:
-            n=traj_odom.num_poses-odom_ang_vel.shape[0]
-            traj_odom=change_traj(traj_odom, n-1)
-
-        delta_ts_odom = traj_odom.timestamps[1:] - traj_odom.timestamps[:-1]
-        p_rel_odom = relative_pose_from_trajectories([traj_odom])[0]
-        vel_odom = np.linalg.norm(np.array(p_rel_odom)[:, :3, 3], axis=1) / delta_ts_odom
-
         delta_ts = horas.diff().values.astype(np.int64) / 1e9
 
         print(delta_ts.shape[0])
@@ -2758,7 +2747,6 @@ def IMPROVEMENT_VISUALIZATION(X_t,y_t,pred,features,lab_target,title):
         num, out = count_outliers(ODOM_abs)
         print(num, "outliers ODOM")
 
-
         p50 = np.percentile(ODOM_abs, 50)
         p90 = np.percentile(ODOM_abs, 90)
         p95 = np.percentile(ODOM_abs, 95)
@@ -2780,7 +2768,6 @@ def IMPROVEMENT_VISUALIZATION(X_t,y_t,pred,features,lab_target,title):
 
         num, out = count_outliers(PRED_abs)
         print(num, "outliers PRED")
-
 
         p50 = np.percentile(PRED_abs, 50)
         p90 = np.percentile(PRED_abs, 90)
