@@ -16,14 +16,11 @@ class PageHinkley:
     def update(self, value):
         self.t += 1
 
-        # actualización media incremental
         self.mean = self.alpha * self.mean + (1 - self.alpha) * value
 
-        # acumulador PH
         self.cumulative += value - self.mean - self.delta
         self.minimum = min(self.minimum, self.cumulative)
 
-        # condición de drift
         if (self.cumulative - self.minimum) > self.lambda_:
             self.reset()
             return True
