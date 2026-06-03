@@ -16,7 +16,7 @@ from analisis_features_utils import (treatment_XGB_WHOLE,treatment_SGD_WHOLE,tre
                                      IMPROVEMENT_VISUALIZATION_error,VEL_THREE_modelserror,
                                      experiment_1CD,experiment_2CD,IMPROVEMENT_VISUALIZATION_error_lag,
                                      THREE_models,ONE_model,VEL_THREE_modelselastic,ONE_modelelastic,
-                                     model_Slip_index,conditional_model)
+                                     model_Slip_index,conditional_model,merge_predictions)
 
 # ============================================================
 # CONFIGURATION
@@ -52,6 +52,8 @@ FEATURES_SV1 = [
     'ang_vel_cmd_z'
 ]
 LABEL_SV='SV'
+LABEL_3_SV=['SV_snow','SV_rain','SV_clear']
+
 FEATURES_L_W_1 = [
     'lin_acc_imu_x',
     'lin_acc_imu_y',
@@ -62,6 +64,19 @@ FEATURES_L_W_1 = [
     'lin_vel_cmd_x',
     'ang_vel_cmd_z',
     'SV'
+]
+FEATURES_conditional = [
+    'lin_acc_imu_x',
+    'lin_acc_imu_y',
+    'ang_vel_imu_z',
+    'grav_x',
+    'lin_vel_odom_x',
+    'ang_vel_odom_z',
+    'lin_vel_cmd_x',
+    'ang_vel_cmd_z',
+    'SV_snow_road_pred',
+    'SV_clear_road_pred',
+    'SV_raining_pred'
 ]
 lABEL_L_W='TARGET'# GT LINEAR VELOCITY
 
@@ -413,123 +428,26 @@ if __name__ == '__main__':
     y_test = datasettest["SV"]
 
     test_condition_ordenado = dict(sorted(test_condition.items()))
-    #experiment_1CD(X_train, y_train, test_condition_ordenado, FEATURES1, 'SV')
-    #experiment_2CD(train_condition, X_test,y_test, FEATURES1, 'SV')
+    train_prediction,test_prediction=model_Slip_index(train_condition, test_condition_ordenado, FEATURES1)
 
-    #treatment_XGB_season(train_condition,test_condition,FEATURES1,'SV')
-    #treatment_SGDseason(train_condition,test_condition,FEATURES1,'SV')
-    #treatment_SGDPARTIALseason(train_condition, test_condition, FEATURES1, 'SV')
+    lag1=len(FEATURES1)
+    my_map = {"snow_road": 1, "clear_road": 2, "raining": 3}
+    train_pred_convertido = {my_map[k]: v for k, v in train_prediction.items()}
+    test_pred_convertido = {my_map[k]: v for k, v in test_prediction.items()}
 
-    '''predictionSGD, SGDFITdrifts, SGDPartialdrifts = treatment_SGD_WHOLE(X_train, y_train, X_test, y_test, FEATURES1,"SV")
-    print('Drifts detected by means of SGD: ', datasettest.index[SGDFITdrifts])
-    print('Drifts detected by means of Partial SGD: ', datasettest.index[SGDPartialdrifts])
-    pred_SV.append(predictionSGD[1])
-    '''
-    M3_results,M3_prediction,M3model_category,M3_drifts,M3_drifts_date=THREE_models(train_condition, X_test, y_test, FEATURES1,"SV")
-    M1_results, M1_prediction= ONE_model(X_train, y_train, X_test, y_test, FEATURES1, "SV")
-    model_Slip_index,conditional_model
+    train_final = merge_predictions(train_condition, lag1,train_pred_convertido)
+    test_final = merge_predictions(test_condition_ordenado,lag1, test_pred_convertido)
 
-    '''fig = plt.figure(figsize=(15, 15))
-    ax = fig.add_subplot(111)
-    ax.plot(snow_road, label="Slip Index  for the TEST snow_road", color='gold', linewidth=2)
-    ax.set_title("TEST snow_road")
-    ax.set_xlabel("Timestamp")
-    ax.set_ylabel("Slip index")
-    y_max = np.max(snow_road.values)
-    y_min = np.min(snow_road.values)
-    ax.axhline(y_max, color='red', linestyle='--', linewidth=1)
-    ax.axhline(y_min, color='blue', linestyle='--', linewidth=1)
-    x_pos = snow_road.index[int(len(snow_road) * 0.85)]
-    ax.text(x_pos, y_max, f'{y_max:.2f}', color='red', fontsize=8)
-    ax.text(x_pos, y_min, f'{y_min:.2f}', color='blue', fontsize=8)
-    ax.legend()
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.show(block=True)
+    FEATURES2 = FEATURES_METEO + FEATURES_conditional
 
-    fig = plt.figure(figsize=(15, 15))
-    ax = fig.add_subplot(111)
-    ax.plot(clear_road, label="Slip Index  for the TEST clear_road", color='green', linewidth=2)
-    ax.set_title("TEST clear_road")
-    ax.set_xlabel("Timestamp")
-    ax.set_ylabel("Slip index")
-    y_max = clear_road.values.max()
-    y_min = clear_road.values.min()
-    ax.axhline(y_max, color='red', linestyle='--', linewidth=1)
-    ax.axhline(y_min, color='blue', linestyle='--', linewidth=1)
-    x_pos = clear_road.index[
-        int(len(clear_road) * 0.85)]
-    ax.text(x_pos, y_max, f'{y_max:.2f}', color='red', fontsize=8)
-    ax.text(x_pos, y_min, f'{y_min:.2f}', color='blue', fontsize=8)
-    ax.legend()
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.show(block=True)
+    X_trainvel = train_final[FEATURES2]
+    y_trainvel = train_final["TARGET"]
 
-    fig = plt.figure(figsize=(15, 15))
-    ax = fig.add_subplot(111)
-    ax.plot(clear_raining, label="Slip Index  for the TEST clear_raining", color='orange', linewidth=2)
-    ax.set_title("TEST clear_raining")
-    ax.set_xlabel("Timestamp")
-    ax.set_ylabel("Slip index")
-    y_max = clear_raining.values.max()
-    y_min = clear_raining.values.min()
-    ax.axhline(y_max, color='red', linestyle='--', linewidth=1)
-    ax.axhline(y_min, color='blue', linestyle='--', linewidth=1)
-    x_pos = clear_raining.index[
-        int(len(clear_raining) * 0.85)]
-    ax.text(x_pos, y_max, f'{y_max:.2f}', color='red', fontsize=8)
-    ax.text(x_pos, y_min, f'{y_min:.2f}', color='blue', fontsize=8)
-    ax.legend()
-    ax.tick_params(axis="x", rotation=45)
-    plt.tight_layout()
-    plt.show(block=True)'''
+    X_testvel = test_final[FEATURES2]
+    y_testvel = test_final["TARGET"]
 
+    M1_resultsVEL, M1_predictionVEL = conditional_model(X_trainvel, y_trainvel, X_testvel, y_testvel, FEATURES2, "TARGET")
 
-    FEATURES2 = FEATURES_METEO + FEATURES_L_W_1
-    # MODELS TO USING SV
-
-    X_train = datasettrain[FEATURES2]
-    y_train1 = datasettrain["TARGET"]
-
-    datasettest['SV'][length_fetauresSV[0]:]=M3_prediction
-    X_test = datasettest[FEATURES2]
-    y_test1 = datasettest["TARGET"]
-
-    tmp=0
-    #test_condition_ordenado = dict(sorted(test_condition.items()))
-    for key, df in test_condition_ordenado.items():
-        if key==1:
-            df.loc[df.index[length_fetauresSV[0]:], 'SV'] = M3_prediction[:df.loc[df.index[length_fetauresSV[0]:], 'SV'].shape[0]]
-            tmp=df.loc[df.index[length_fetauresSV[0]:], 'SV'].shape[0]
-        elif key==2:
-            df.loc[df.index[:], 'SV'] = M3_prediction[tmp:df.shape[0]+tmp]
-            tmp+= df.shape[0]
-        else:
-            df.loc[df.index[:], 'SV'] = M3_prediction[tmp:]
-
-    #treatment_XGB_season(train_condition,test_condition,opt,'TARGET')
-    #treatment_SGDseason(train_condition,test_condition,opt,'TARGET')
-    #treatment_SGDPARTIALseason(train_condition, test_condition, opt, 'TARGET')
-
-    '''predictionSGD, SGDFITdrifts, SGDPartialdrifts = treatment_SGD_WHOLE(X_train, y_train1, X_test, y_test1, FEATURES2,"TARGET")
-    print('Drifts detected by means of SGD: ', datasettest.index[SGDFITdrifts])
-    print('Drifts detected by means of Partial SGD: ', datasettest.index[SGDPartialdrifts])
-    pred_LIN_VEL.append(predictionSGD[1])'''
-
-    M3_resultsVEL, M3_predictionVEL= VEL_THREE_modelselastic(train_condition, X_test, y_test1, FEATURES2,"TARGET",M3model_category,M3_drifts)
-    #M3_resultsVEL, M3_predictionVEL = VEL_THREE_modelserror(train_condition, X_test, y_test1, FEATURES2, "TARGET", M3model_category, M3_drifts)
-    flat_vel = np.concatenate(M3_predictionVEL)
-
-    #IMPROVEMENT_VISUALIZATION_error_lag(X_test, y_test1, flat_vel, FEATURES2, "TARGET", 'Trajectory Visualization for :')
-    IMPROVEMENT_VISUALIZATION_error(X_test, y_test1, flat_vel, FEATURES2, "TARGET", 'Trajectory Visualization for :')
-
-    datasettest['SV'][length_fetauresSV[0]:] = M1_prediction
-    #X_test = datasettest[FEATURES2]
-    y_test2 = datasettest["TARGET"]
-
-    #M1_resultsVEL, M1_predictionVEL = ONE_model(X_train, y_train, X_test, y_test2, FEATURES2,"TARGET")
-    M1_resultsVEL, M1_predictionVEL = ONE_modelelastic(X_train, y_train, X_test, y_test2, FEATURES2, "TARGET")
-
+    IMPROVEMENT_VISUALIZATION_error(X_testvel, y_testvel, M1_predictionVEL, 'Trajectory Visualization for :')
     print('END')
 
